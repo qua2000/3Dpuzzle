@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>No.2 円錐台の切断面 ― Three.js 解説アニメーション</title>
+
+<!-- PWA対応 -->
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="切断面No.2">
+<link rel="apple-touch-icon" href="./icon-192.png">
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 500;
+    color: #a8c8e8;
+    margin: 12px 0 4px;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #7a8fa6;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  #canvas-container {
+    width: min(700px, 100%);
+    aspect-ratio: 4/3;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #2a3a52;
+    background: #0d1117;
+    position: relative;
+  }
+  canvas { display: block; width: 100% !important; height: 100% !important; }
+  .controls {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    width: min(700px, 100%);
+  }
+  button {
+    padding: 9px 18px;
+    border-radius: 8px;
+    border: 1px solid #3a5070;
+    background: #1e2d42;
+    color: #a8c8e8;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+  button:hover { background: #28405e; }
+  button:active { transform: scale(0.97); }
+  button.active { background: #2a5080; border-color: #5090c0; }
+  .info-box {
+    margin-top: 14px;
+    width: min(700px, 100%);
+    background: #141d2b;
+    border: 1px solid #2a3a52;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: #c0d0e0;
+  }
+  .info-box h2 { font-size: 14px; color: #7ab0d8; margin-bottom: 6px; font-weight: 500; }
+  .step-label {
+    position: absolute;
+    top: 12px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.55);
+    color: #90c0e8;
+    font-size: 13px;
+    padding: 4px 14px;
+    border-radius: 20px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .legend {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #8aa0b8; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<h1>No.2　円錐台の切断面アニメーション</h1>
+<p class="subtitle">上面=大円(半径1)・底面=小円／中心から2/3の位置で垂直に切断 → 矢印方向から見た切断面（正解：選択肢5）</p>
+
+<div id="canvas-container">
+  <div class="step-label" id="step-label">① 元の円錐台を確認</div>
+  <canvas id="c"></canvas>
+</div>
+
+<div class="controls">
+  <button id="btn0" class="active" onclick="gotoStep(0)">① 元の形状</button>
+  <button id="btn1" onclick="gotoStep(1)">② 切断面XX'を表示</button>
+  <button id="btn2" onclick="gotoStep(2)">③ 切断アニメーション</button>
+  <button id="btn3" onclick="gotoStep(3)">④ 切断面を正面から見る</button>
+  <button id="btn4" onclick="gotoStep(4)">⑤ 自由に回転</button>
+</div>
+
+<div class="info-box">
+  <h2 id="info-title">① 元の円錐台（フラスタム）の形状</h2>
+  <p id="info-text">平面図は「外側の大円(上面・半径1)・内側の小円(底面、点線)」。立面図は下がすぼまった台形（下が底面で狭く、上が上面で広い）。</p>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#4488cc"></div>円錐台の本体</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#44cc88"></div>切断面（XX'平面）</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ffaa44"></div>残る部分の断面</div>
+  </div>
+</div>
+
+<!-- Three.js r128 CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   形状の定義（修正版）
+   ・上面（y = H）: 大円、半径 R_TOP = 1
+   ・底面（y = 0）: 小円、半径 R_BOT = 0.5
+   ・切断平面：上面の円の中心から X方向に 2/3 だけ離れた位置を通り、
+     大円（平面図でみたXX'線）に対して垂直＝つまりYZ平面に平行な平面で、
+     x = OFFSET の位置で切る。
+   ════════════════════════════════════════════════════════════ */
+const R_TOP = 1.0;      // 上面（大円）半径
+const R_BOT = 0.5;      // 底面（小円）半径　※見た目のバランス用に0.5に設定
+const HEIGHT = 2.0;     // 高さ
+const OFFSET = R_TOP * (2 / 3); // 中心から2/3の位置で切断（x = OFFSET）
+const SEG = 96;
+
+/* ─── シーン設定 ─── */
+const container = document.getElementById('canvas-container');
+const canvas = document.getElementById('c');
+const W = () => container.clientWidth;
+const H = () => container.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x0d1117);
+renderer.localClippingEnabled = true;
+renderer.setSize(W(), H());
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, W() / H(), 0.1, 100);
+camera.position.set(0, 2.5, 6);
+camera.lookAt(0, 1.0, 0);
+
+/* ─── ライト ─── */
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(3, 6, 4);
+scene.add(dir);
+const back = new THREE.DirectionalLight(0x8899bb, 0.3);
+back.position.set(-3, 2, -4);
+scene.add(back);
+
+/* ════════════════════════════════════════════════════════════
+   円錐台ジオメトリ（カスタム：底面=小円・上面=大円）
+   THREE.CylinderGeometry(radiusTop, radiusBottom, height,...)
+   → radiusTop = R_TOP（上面=大円）、radiusBottom = R_BOT（底面=小円）
+   ════════════════════════════════════════════════════════════ */
+const frustumGeo = new THREE.CylinderGeometry(R_TOP, R_BOT, HEIGHT, SEG, 1, false);
+
+const matBody = new THREE.MeshPhongMaterial({
+  color: 0x3366aa,
+  transparent: true, opacity: 0.82,
+  side: THREE.DoubleSide,
+  shininess: 60,
+});
+const matCut = new THREE.MeshPhongMaterial({
+  color: 0xffaa44,
+  side: THREE.DoubleSide,
+  shininess: 30,
+});
+const matPlane = new THREE.MeshPhongMaterial({
+  color: 0x44cc88,
+  transparent: true, opacity: 0.32,
+  side: THREE.DoubleSide,
+});
+
+/* ─── 全体の円錐台（ステップ0,1,2用） ─── */
+const frustumMesh = new THREE.Mesh(frustumGeo, matBody);
+frustumMesh.position.y = HEIGHT / 2;
+scene.add(frustumMesh);
+
+/* ─── 切断平面（半透明板）x = OFFSET、YZ平面に平行 ─── */
+const planeGeo = new THREE.PlaneGeometry(3.2, HEIGHT + 0.6);
+const planeMesh = new THREE.Mesh(planeGeo, matPlane);
+planeMesh.rotation.y = Math.PI / 2;
+planeMesh.position.set(OFFSET, HEIGHT / 2, 0);
+planeMesh.visible = false;
+scene.add(planeMesh);
+
+/* ════════════════════════════════════════════════════════════
+   切断後、残る部分（x < OFFSET 側＝中心を含む大きい方）
+   clippingPlanes で x > OFFSET をカット
+   平面の法線は (1,0,0) とし constant = -OFFSET とすることで
+   plane: dot(normal, point) + constant <= 0 を満たす側（x <= OFFSET）が残る
+   ════════════════════════════════════════════════════════════ */
+const clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), -OFFSET);
+
+const halfGeo = new THREE.CylinderGeometry(R_TOP, R_BOT, HEIGHT, SEG, 1, false);
+const halfMesh = new THREE.Mesh(halfGeo, new THREE.MeshPhongMaterial({
+  color: 0x3366aa,
+  transparent: true, opacity: 0.88,
+  side: THREE.DoubleSide,
+  clippingPlanes: [clipPlane],
+  shininess: 60,
+}));
+halfMesh.position.y = HEIGHT / 2;
+halfMesh.visible = false;
+scene.add(halfMesh);
+
+/* ════════════════════════════════════════════════════════════
+   取り除かれる側（x > OFFSET 側＝斜線部分・小さい方）
+   こちらは逆向きのclippingPlaneで、x < OFFSET側をカットし、
+   x > OFFSET側だけを残す。アニメーションでスライドさせて
+   「物理的に取り除かれる」様子を見せる。
+   ════════════════════════════════════════════════════════════ */
+const removedClipPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), OFFSET);
+const removedGeo = new THREE.CylinderGeometry(R_TOP, R_BOT, HEIGHT, SEG, 1, false);
+const removedMesh = new THREE.Mesh(removedGeo, new THREE.MeshPhongMaterial({
+  color: 0xcc5555,
+  transparent: true, opacity: 0.55,
+  side: THREE.DoubleSide,
+  clippingPlanes: [removedClipPlane],
+  shininess: 40,
+}));
+removedMesh.position.y = HEIGHT / 2;
+removedMesh.visible = false;
+scene.add(removedMesh);
+
+/* ════════════════════════════════════════════════════════════
+   切断面の形状（オレンジ）
+   ・高さ y における半径: r(y) = R_BOT + (R_TOP - R_BOT) * (y / HEIGHT)
+   ・x = OFFSET の位置で切るので、その高さでの切断面の弦の半幅は
+       halfWidth(y) = sqrt( r(y)^2 - OFFSET^2 )  (r(y) >= OFFSET の範囲のみ存在)
+   ・OFFSET が底面半径 R_BOT より大きい場合、底付近では平面が
+     円柱(底面)の外を通るため、切断面はその高さでは現れない
+     （= 底面では弦が存在せず、ある高さから切断面が始まる）
+   ════════════════════════════════════════════════════════════ */
+function buildCrossSectionShape() {
+  const pts = [];
+  const N = 64;
+  // y=0(底面)からy=HEIGHTまで、半径がOFFSET以上になる範囲を求める
+  // r(y) = R_BOT + (R_TOP-R_BOT)*(y/H) を OFFSET = r(y) で解くと
+  // y0 = H * (OFFSET - R_BOT) / (R_TOP - R_BOT)
+  let yStart = 0;
+  if (OFFSET > R_BOT) {
+    yStart = HEIGHT * (OFFSET - R_BOT) / (R_TOP - R_BOT);
+  }
+  yStart = Math.max(0, Math.min(HEIGHT, yStart));
+
+  // 右側の輪郭（上向き）: yStart -> HEIGHT
+  const rightPts = [];
+  for (let i = 0; i <= N; i++) {
+    const y = yStart + (HEIGHT - yStart) * (i / N);
+    const r = R_BOT + (R_TOP - R_BOT) * (y / HEIGHT);
+    const halfW = Math.sqrt(Math.max(0, r * r - OFFSET * OFFSET));
+    rightPts.push(new THREE.Vector2(halfW, y));
+  }
+  // 左側の輪郭（下向き、対称）: HEIGHT -> yStart
+  const leftPts = [];
+  for (let i = N; i >= 0; i--) {
+    const y = yStart + (HEIGHT - yStart) * (i / N);
+    const r = R_BOT + (R_TOP - R_BOT) * (y / HEIGHT);
+    const halfW = Math.sqrt(Math.max(0, r * r - OFFSET * OFFSET));
+    leftPts.push(new THREE.Vector2(-halfW, y));
+  }
+
+  const shape = new THREE.Shape();
+  shape.moveTo(rightPts[0].x, rightPts[0].y);
+  rightPts.forEach(p => shape.lineTo(p.x, p.y));
+  leftPts.forEach(p => shape.lineTo(p.x, p.y));
+  shape.closePath();
+  return { shape, yStart };
+}
+
+const { shape: csShape, yStart: csYStart } = buildCrossSectionShape();
+const csGeo = new THREE.ShapeGeometry(csShape, 64);
+const csMesh = new THREE.Mesh(csGeo, matCut);
+// ShapeGeometryはXY平面上に作られる→ X軸まわりに90度回して
+// (shapeのx,y) を (z, y) にマッピングし、平面 x=OFFSET に配置する
+csMesh.rotation.y = -Math.PI / 2;
+csMesh.position.set(OFFSET, 0, 0);
+csMesh.visible = false;
+scene.add(csMesh);
+
+/* ════════════════════════════════════════════════════════════
+   上面・底面の「弓形」（切断によって現れる円の一部）
+   x <= OFFSET 側が残るので、上面(大円,R_TOP)・底面(小円,R_BOT)の
+   弓形(x<=OFFSET の部分)を作る。底面はOFFSET>R_BOTなら全く現れない。
+   ════════════════════════════════════════════════════════════ */
+function makeCircleSegment(radius, offsetX, color) {
+  // 円: x^2+z^2=radius^2 のうち x<=offsetX の部分（弓形）
+  if (offsetX >= radius) return null; // 平面が円の外を通る→形状なし
+  const shape = new THREE.Shape();
+  const halfW = Math.sqrt(radius * radius - offsetX * offsetX);
+  const angStart = Math.atan2(halfW, offsetX);   // 上交点の角度
+  const angEnd = -angStart;                       // 下交点の角度（z負側）
+  // offsetX から円弧（大きい方、x<=offsetXの弧）をたどる
+  shape.moveTo(offsetX, halfW);
+  const N = 64;
+  // 弧をoffsetX側の反対(x=-radius方向)を通るようにangleを2π-側でまわす
+  const a0 = Math.atan2(halfW, offsetX);
+  const a1 = Math.atan2(-halfW, offsetX);
+  // a0 から 2π方向（-x側を経由）して a1 へ
+  let sweepStart = a0;
+  let sweepEnd = a1 - 2 * Math.PI; // 負方向に回ってx<=offsetX側を通す
+  for (let i = 0; i <= N; i++) {
+    const a = sweepStart + (sweepEnd - sweepStart) * (i / N);
+    shape.lineTo(radius * Math.cos(a), radius * Math.sin(a));
+  }
+  shape.closePath();
+  const geo = new THREE.ShapeGeometry(shape, 64);
+  const mat = new THREE.MeshPhongMaterial({ color, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geo, mat);
+  // shapeはXY平面 → 床(XZ平面)に寝かせる。shapeのyをzに対応させる
+  mesh.rotation.x = -Math.PI / 2;
+  return mesh;
+}
+
+const topSegment = makeCircleSegment(R_TOP, OFFSET, 0x224488);
+if (topSegment) {
+  topSegment.position.set(0, HEIGHT + 0.002, 0);
+  topSegment.visible = false;
+  scene.add(topSegment);
+}
+
+const botSegment = makeCircleSegment(R_BOT, OFFSET, 0x224488);
+if (botSegment) {
+  botSegment.position.set(0, 0.002, 0);
+  botSegment.visible = false;
+  scene.add(botSegment);
+}
+
+/* ─── グリッド・軸 ─── */
+const grid = new THREE.GridHelper(8, 16, 0x223344, 0x1a2a36);
+scene.add(grid);
+
+function makeAxisLine(from, to, color) {
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(...from), new THREE.Vector3(...to)
+  ]);
+  return new THREE.Line(geo, new THREE.LineBasicMaterial({ color }));
+}
+scene.add(makeAxisLine([-3,0,0],[3,0,0], 0x553333));
+scene.add(makeAxisLine([0,0,0],[0,4,0], 0x335533));
+scene.add(makeAxisLine([0,0,-3],[0,0,3], 0x333355));
+
+/* XX' 線（赤破線）：上面の高さで、x=OFFSETの位置を通り、Z方向に伸びる線 */
+const xxGeo = new THREE.BufferGeometry().setFromPoints([
+  new THREE.Vector3(OFFSET, HEIGHT + 0.05, -2.2),
+  new THREE.Vector3(OFFSET, HEIGHT + 0.05, 2.2)
+]);
+const xxLine = new THREE.Line(xxGeo, new THREE.LineDashedMaterial({
+  color: 0xff4444, dashSize: 0.15, gapSize: 0.08, linewidth: 2
+}));
+xxLine.computeLineDistances();
+xxLine.visible = false;
+scene.add(xxLine);
+
+/* ─── 回転操作（簡易OrbitControls） ─── */
+let isDragging = false, prevX = 0, prevY = 0;
+let rotX = 0.3, rotY = 0.4;
+let freeMode = false;
+
+canvas.addEventListener('mousedown', e => { if (freeMode) { isDragging = true; prevX = e.clientX; prevY = e.clientY; } });
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  rotY += (e.clientX - prevX) * 0.01;
+  rotX += (e.clientY - prevY) * 0.01;
+  rotX = Math.max(-1.4, Math.min(1.4, rotX));
+  prevX = e.clientX; prevY = e.clientY;
+  updateCamera();
+});
+canvas.addEventListener('touchstart', e => { if (freeMode && e.touches.length===1) { isDragging=true; prevX=e.touches[0].clientX; prevY=e.touches[0].clientY; } });
+window.addEventListener('touchend', () => isDragging = false);
+window.addEventListener('touchmove', e => {
+  if (!isDragging || e.touches.length!==1) return;
+  rotY += (e.touches[0].clientX - prevX) * 0.012;
+  rotX += (e.touches[0].clientY - prevY) * 0.012;
+  rotX = Math.max(-1.4, Math.min(1.4, rotX));
+  prevX=e.touches[0].clientX; prevY=e.touches[0].clientY;
+  updateCamera();
+});
+
+function updateCamera() {
+  const r = 6.5;
+  camera.position.set(
+    r * Math.sin(rotY) * Math.cos(rotX),
+    r * Math.sin(rotX) + 1.0,
+    r * Math.cos(rotY) * Math.cos(rotX)
+  );
+  camera.lookAt(0, 1.0, 0);
+}
+
+/* ─── ステップ管理 ─── */
+const stepLabels = [
+  '① 元の円錐台を確認（自動回転）',
+  '② 切断平面 XX\'（緑）を表示',
+  '③ 切断アニメーション実行中…',
+  '④ 切断面を矢印方向（正面）から見る → 選択肢5の形！',
+  '⑤ 自由に回転して確認'
+];
+const infoTitles = [
+  '① 元の円錐台（フラスタム）の形状',
+  '② 切断平面 XX\' の位置',
+  '③ XX\' 平面で切断・x>OFFSET側を除去',
+  '④ 矢印方向（前方）から見た切断面 ＝ 選択肢5',
+  '⑤ 自由回転モード'
+];
+const infoTexts = [
+  '上面（大円・半径1）が底面（小円）より大きい、逆さまの円錐台です。立面図は下がすぼまった台形になります。',
+  '上面の大円の中心から2/3の位置（x = 0.667）を通り、円に対して垂直な平面（緑）で切断します。中心は通りません。',
+  '③ 切断面より小さい方（赤）が外側へスライドして分離します。残った大きい方（青）の断面（オレンジ）が現れます。',
+  '矢印方向（正面）から見ると、切断面は上面に近いほど幅が広く、底面に近づくにつれ細くなり、ある高さで消えます（底面の小円の半径よりOFFSETが大きいため）。これが選択肢5の特徴的なドーム型の切断面です。',
+  'マウスドラッグまたはタッチで自由に回転して立体を確認できます。'
+];
+
+let currentStep = 0;
+let animating = false;
+let animStartTime = 0;
+const ANIM_DURATION = 2000;
+
+function setVisible(objects, v) { objects.filter(Boolean).forEach(o => o.visible = v); }
+
+function gotoStep(n) {
+  currentStep = n;
+  freeMode = (n === 4);
+  document.querySelectorAll('.controls button').forEach((b, i) => {
+    b.classList.toggle('active', i === n);
+  });
+  document.getElementById('step-label').textContent = stepLabels[n];
+  document.getElementById('info-title').textContent = infoTitles[n];
+  document.getElementById('info-text').textContent = infoTexts[n];
+
+  animating = false;
+  setVisible([frustumMesh], true);
+  setVisible([planeMesh, xxLine, halfMesh, csMesh, topSegment, botSegment, removedMesh], false);
+  matBody.opacity = 0.82;
+  matBody.transparent = true;
+  removedMesh.position.x = 0;
+  removedMesh.material.opacity = 0.55;
+
+  if (n === 0) {
+    rotX = 0.3; rotY = 0.4; updateCamera();
+  }
+  if (n === 1) {
+    planeMesh.visible = true;
+    xxLine.visible = true;
+    rotX = 0.4; rotY = 0.2; updateCamera();
+  }
+  if (n === 2) {
+    // 全体の円錐台は非表示にし、代わりに「残る側」と「取り除かれる側」の
+    // 2つのメッシュを使ってアニメーションさせる
+    frustumMesh.visible = false;
+    planeMesh.visible = true;
+    xxLine.visible = true;
+    halfMesh.visible = true;       // 残る側（青）
+    removedMesh.visible = true;    // 取り除かれる側（赤）
+    removedMesh.position.x = 0;
+    removedMesh.material.opacity = 0.55;
+    csMesh.visible = false;
+    if (topSegment) topSegment.visible = false;
+    if (botSegment) botSegment.visible = false;
+    camera.position.set(4, 2.2, 5.5);
+    camera.lookAt(0, 1.0, 0);
+    animating = true;
+    animStartTime = performance.now();
+  }
+  if (n === 3) {
+    frustumMesh.visible = false;
+    halfMesh.visible = true;
+    csMesh.visible = true;
+    if (topSegment) topSegment.visible = true;
+    if (botSegment) botSegment.visible = true;
+    camera.position.set(0, 1.0, 6.5);
+    camera.lookAt(0, 1.0, 0);
+    rotX = 0; rotY = 0;
+  }
+  if (n === 4) {
+    frustumMesh.visible = false;
+    halfMesh.visible = true;
+    csMesh.visible = true;
+    if (topSegment) topSegment.visible = true;
+    if (botSegment) botSegment.visible = true;
+    rotX = 0.3; rotY = 0.5; updateCamera();
+  }
+}
+
+/* ─── アニメーションループ ─── */
+let autoRotY = 0;
+function animate(time) {
+  requestAnimationFrame(animate);
+
+  if (currentStep === 0) {
+    autoRotY += 0.004;
+    camera.position.set(
+      6 * Math.sin(autoRotY) * Math.cos(0.3),
+      6 * Math.sin(0.3) + 1.0,
+      6 * Math.cos(autoRotY) * Math.cos(0.3)
+    );
+    camera.lookAt(0, 1.0, 0);
+  }
+
+  if (animating && currentStep === 2) {
+    const elapsed = time - animStartTime;
+    const HOLD = 600;          // 最初に静止して見せる時間(ms)
+    const SLIDE = 1800;        // スライドにかける時間(ms)
+    const SLIDE_DISTANCE = 1.8; // 取り除く側をスライドさせる距離
+
+    if (elapsed < HOLD) {
+      // 何もしない（切断前の状態を見せる）
+      removedMesh.position.x = 0;
+    } else {
+      const t = Math.min((elapsed - HOLD) / SLIDE, 1);
+      // easeOutCubic でなめらかに
+      const ease = 1 - Math.pow(1 - t, 3);
+      removedMesh.position.x = ease * SLIDE_DISTANCE;
+      removedMesh.material.opacity = 0.55 * (1 - ease * 0.85);
+
+      if (t >= 1) {
+        animating = false;
+        removedMesh.visible = false;
+        csMesh.visible = true;
+        if (topSegment) topSegment.visible = true;
+        if (botSegment) botSegment.visible = true;
+      }
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+animate(0);
+
+window.addEventListener('resize', () => {
+  renderer.setSize(W(), H());
+  camera.aspect = W() / H();
+  camera.updateProjectionMatrix();
+});
+
+gotoStep(0);
+</script>
+
+<!-- PWA: Service Worker登録 -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(() => console.log('Service Worker 登録成功'))
+      .catch((err) => console.log('Service Worker 登録失敗:', err));
+  });
+}
+</script>
+</body>
+</html>
