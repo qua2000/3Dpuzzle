@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>No.2 円錐台の切断面 ― 問題・解答解説</title>
+
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="問題No.2">
+<link rel="apple-touch-icon" href="./icon-192.png">
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .top-nav {
+    width: min(700px, 100%);
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .top-nav a {
+    font-size: 12.5px;
+    color: #7ab0d8;
+    text-decoration: none;
+    padding: 6px 12px;
+    border: 1px solid #2a3a52;
+    border-radius: 8px;
+    background: #141d2b;
+    white-space: nowrap;
+  }
+  .top-nav a:hover { background: #1e2d42; }
+
+  h1 {
+    font-size: 18px;
+    font-weight: 500;
+    color: #a8c8e8;
+    margin: 4px 0 4px;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #7a8fa6;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+
+  .card {
+    width: min(700px, 100%);
+    background: #141d2b;
+    border: 1px solid #2a3a52;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #c0d0e0;
+  }
+  .card h2 {
+    font-size: 14.5px;
+    color: #7ab0d8;
+    font-weight: 500;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #2a3a52;
+  }
+  .meta {
+    font-size: 12.5px;
+    color: #7a8fa6;
+    margin-bottom: 10px;
+  }
+
+  .placeholder {
+    border: 1px dashed #4a6080;
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: #8aa8c8;
+    font-size: 13px;
+    background: #10182380;
+  }
+
+  .choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .choice {
+    border: 1px solid #2a3a52;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    background: #0d1117;
+    font-size: 13px;
+    color: #a8c0d8;
+  }
+  .choice.correct {
+    border-color: #4fbf8f;
+    background: #10241c;
+    color: #7ee0b8;
+    font-weight: 600;
+  }
+  .choice .num {
+    display: block;
+    font-size: 12px;
+    color: #7a8fa6;
+    margin-bottom: 4px;
+  }
+
+  .answer-badge {
+    display: inline-block;
+    background: #2a5080;
+    color: #dff0ff;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .cta {
+    width: min(700px, 100%);
+    display: flex;
+    justify-content: center;
+    margin-top: 6px;
+  }
+  .cta a {
+    display: inline-block;
+    padding: 11px 26px;
+    border-radius: 8px;
+    border: 1px solid #5090c0;
+    background: #2a5080;
+    color: #dff0ff;
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .cta a:hover { background: #336090; }
+</style>
+</head>
+<body>
+
+<div class="top-nav">
+  <a href="./index.html">← トップページ</a>
+  <a href="./frustum-no2.html">3Dアニメーションを見る →</a>
+</div>
+
+<h1>No.2　円錐台の切断面</h1>
+<p class="subtitle">出典：Ⅰ種国家公務員試験・空間把握</p>
+
+<div class="card">
+  <h2>問題</h2>
+  <div class="meta">下の図のように、上面が大円・底面が小円の円錐台（フラスタム）がある。平面図では大円の中に小円が同心円状に描かれ、立面図では下がすぼまった台形として表される。この円錐台を、平面図上の直線 XX'（上面の円の中心から2/3の位置を通り、円に対して垂直な平面）で切断したとき、矢印の方向から見た切断面として正しいものはどれか。</div>
+  <div class="placeholder">
+    ここに元の問題図（平面図＋立面図、XX'切断線、矢印の向き）の画像を挿入してください。<br>
+    前回チャットで作成した正式な問題文がある場合は、その文章に差し替え可能です。
+  </div>
+</div>
+
+<div class="card">
+  <h2>選択肢</h2>
+  <div class="choices">
+    <div class="choice"><span class="num">選択肢1</span>（画像挿入）</div>
+    <div class="choice"><span class="num">選択肢2</span>（画像挿入）</div>
+    <div class="choice"><span class="num">選択肢3</span>（画像挿入）</div>
+    <div class="choice"><span class="num">選択肢4</span>（画像挿入）</div>
+    <div class="choice correct"><span class="num">選択肢5</span>（画像挿入）正解</div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>解答</h2>
+  <span class="answer-badge">正解：選択肢 5</span>
+</div>
+
+<div class="card">
+  <h2>解説</h2>
+  <p>
+    ① まず円錐台の全体形状を把握する。上面は大円（半径1）、底面は小円（半径0.5）で、
+    高さ方向に見ると下がすぼまった台形になる、いわば「逆さまの円錐台」である。
+  </p>
+  <p>
+    ② 切断面 XX' は、上面の大円の中心から2/3の位置を通り、円に対して垂直な平面である。
+    中心そのものは通らない点に注意する。
+  </p>
+  <p>
+    ③ この位置で切断すると、断面の幅は上面に近いほど広く、底面に近づくにつれて狭くなる。
+    さらに、切断面の位置（中心から2/3）が底面の小円の半径よりも外側にあるため、
+    ある高さより下では平面が円柱の外側を通ることになり、断面はそこで途切れる
+    （＝底面まで届かず、ある高さで消える）。
+  </p>
+  <p>
+    ④ 以上より、矢印方向から見た切断面は、上が広く下にいくほど細くなり、
+    底に達する前に先端がすぼまって消えるドーム型（弓形が上下に連なったような形）になる。
+    この特徴を満たすのは選択肢5のみである。
+  </p>
+  <p>
+    実際に立体を切断してこの断面が現れる様子は、3Dアニメーションページで
+    ステップごとに確認できる。
+  </p>
+</div>
+
+<div class="cta">
+  <a href="./frustum-no2.html">→ 3Dアニメーションで切断の様子を見る</a>
+</div>
+
+</body>
+</html>

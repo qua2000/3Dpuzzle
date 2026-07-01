@@ -1,8 +1,12 @@
 // シンプルなService Worker（オフラインでも開けるようにキャッシュする）
-const CACHE_NAME = 'frustum-cut-v1';
+const CACHE_NAME = 'puzzle-site-v2';
 const FILES_TO_CACHE = [
   './index.html',
-  './manifest.json'
+  './mondai-no2.html',
+  './frustum-no2.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {

@@ -1,6 +1,6 @@
 {
-  "name": "円錐台の切断面アニメーション",
-  "short_name": "切断面No.2",
+  "name": "空間把握 3Dパズル解説",
+  "short_name": "3Dパズル解説",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1a1a2e",
