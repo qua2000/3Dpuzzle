@@ -86,7 +86,26 @@
     border-radius: 8px;
     padding: 10px;
   }
-  .figure-wrap svg { width: 100%; max-width: 420px; height: auto; }
+  .figure-wrap svg { width: 100%; max-width: 300px; height: auto; display: block; }
+
+  /* 立面図（正面図）は選択肢の図と完全に同じ大きさで表示する */
+  .elevation-wrap { margin-top: 8px; }
+  .elevation-wrap svg { max-width: 150px; margin: 0 auto; }
+
+  .view-arrow {
+    text-align: center;
+    color: #7a8fa6;
+    font-size: 12.5px;
+    margin-top: 10px;
+  }
+
+  .note {
+    font-size: 12.5px;
+    color: #7a8fa6;
+    line-height: 1.7;
+    text-align: center;
+    margin-top: 12px;
+  }
 
   .choices {
     display: grid;
@@ -101,7 +120,8 @@
     text-align: center;
     background: #0d1117;
   }
-  .choice svg { width: 100%; height: auto; display: block; }
+  /* 選択肢の図も、上の立面図と同じ最大サイズ(150px)にそろえる */
+  .choice svg { width: 100%; max-width: 150px; height: auto; display: block; margin: 0 auto; }
   .choice .num {
     display: block;
     font-size: 13px;
@@ -122,12 +142,6 @@
     border-radius: 20px;
     font-size: 13px;
     font-weight: 600;
-  }
-
-  .note {
-    font-size: 12.5px;
-    color: #8aa0b8;
-    margin-top: 6px;
   }
 
   .cta {
@@ -166,55 +180,45 @@
     矢印の方向からみたときの、切断面は次のうちどれか。
   </p>
 
+  <!-- 平面図：上面(大円)・底面(点線の小円、同心円)・XX'線(大円の中心より下)・斜線部分(XX'線と弧に囲まれた弓形) -->
   <div class="figure-wrap">
-    <svg viewBox="0 0 420 300" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 220 190" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
           <line x1="0" y1="0" x2="0" y2="7" stroke="#a8c8e8" stroke-width="1.4"/>
         </pattern>
-        <clipPath id="outerClip">
-          <circle cx="105" cy="90" r="68"/>
-        </clipPath>
       </defs>
 
-      <!-- 平面図ラベル -->
-      <text x="10" y="24" fill="#8aa0b8" font-size="13">平面図</text>
+      <text x="8" y="20" fill="#8aa0b8" font-size="13">平面図</text>
 
-      <!-- 底面(小円・点線)：半径38＝立面図の下辺(小円/底面)の半幅と一致 -->
-      <circle cx="105" cy="90" r="38" fill="none" stroke="#5a7090" stroke-width="1.6" stroke-dasharray="4 3"/>
-      <!-- 上面(大円)：半径68＝立面図の上辺(大円/上面)の半幅と一致 -->
-      <circle cx="105" cy="90" r="68" fill="none" stroke="#c0d0e0" stroke-width="1.8"/>
+      <!-- 底面(小円・点線)：上面の円と同心円 -->
+      <circle cx="110" cy="90" r="38" fill="none" stroke="#5a7090" stroke-width="1.6" stroke-dasharray="4 3"/>
+      <!-- 上面(大円) -->
+      <circle cx="110" cy="90" r="68" fill="none" stroke="#c0d0e0" stroke-width="1.8"/>
 
-      <!-- 斜線部分（XX'より下、大円の弓形） -->
-      <g clip-path="url(#outerClip)">
-        <path d="M 37 60 A 68 68 0 0 0 173 60 L 173 158 A 68 68 0 0 1 37 158 Z"
-              fill="url(#hatch)" opacity="0.9"/>
-      </g>
+      <!-- 斜線部分：XX'線と大円の弧に囲まれた弓形（中心より下） -->
+      <path d="M 59 135 A 68 68 0 0 0 161 135 Z" fill="url(#hatch)" opacity="0.9"/>
 
-      <!-- XX'線 -->
-      <line x1="15" y1="60" x2="205" y2="60" stroke="#e07a7a" stroke-width="1.6"/>
-      <text x="2" y="64" fill="#e07a7a" font-size="14">X</text>
-      <text x="208" y="64" fill="#e07a7a" font-size="14">X'</text>
-
-      <!-- 補助線：円の幅と台形の幅が一致することを示す縦の点線ガイド -->
-      <line x1="37" y1="158" x2="37" y2="206" stroke="#3a4a60" stroke-width="1" stroke-dasharray="2 3"/>
-      <line x1="173" y1="158" x2="173" y2="206" stroke="#3a4a60" stroke-width="1" stroke-dasharray="2 3"/>
-
-      <!-- 矢印（見る方向） -->
-      <line x1="105" y1="170" x2="105" y2="198" stroke="#8aa0b8" stroke-width="1.6"/>
-      <polygon points="105,198 100,189 110,189" fill="#8aa0b8"/>
-
-      <!-- 立面図ラベル -->
-      <text x="10" y="214" fill="#8aa0b8" font-size="13">立面図</text>
-
-      <!-- 立面図(台形)：上辺の幅=大円の直径(136)、下辺の幅=小円の直径(76)で一致させる -->
-      <path d="M 37 206 L 173 206 L 143 264 L 67 264 Z" fill="none" stroke="#c0d0e0" stroke-width="1.8"/>
-
-      <!-- 右側に立体イメージ（参考） -->
-      <text x="250" y="24" fill="#5a6a80" font-size="11">※斜線部分（下側の弓形）を取り除いた</text>
-      <text x="250" y="40" fill="#5a6a80" font-size="11">残りの立体を、矢印方向から見た切断面を選ぶ</text>
+      <!-- XX'線（大円の中心より下を通る） -->
+      <line x1="18" y1="135" x2="202" y2="135" stroke="#e07a7a" stroke-width="1.6"/>
+      <text x="2" y="139" fill="#e07a7a" font-size="14">X</text>
+      <text x="204" y="139" fill="#e07a7a" font-size="14">X'</text>
     </svg>
   </div>
+
+  <div class="view-arrow">↓ 矢印の方向から見る</div>
+
+  <!-- 立面図：選択肢の図と全く同じ座標・同じ表示サイズ(150px)にそろえる -->
+  <div class="figure-wrap elevation-wrap">
+    <svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 40 10 L 160 10 L 138 210 L 62 210 Z" fill="none" stroke="#c0d0e0" stroke-width="2.4"/>
+    </svg>
+  </div>
+
+  <p class="note">
+    ※斜線部分（XX'線と大円の弧に囲まれた弓形の部分）を取り除いた残りの立体を、<br>
+    矢印の方向から見たときの切断面を、下の選択肢から選ぶ。
+  </p>
 </div>
 
 <div class="card">
@@ -297,7 +301,7 @@
 <div class="card">
   <h2>解答</h2>
   <span class="answer-badge">正解：選択肢 5</span>
-  <p class="note">なぜこの形になるのかは、実際に立体を切断してみるのが一番わかりやすいため、3Dアニメーションページで解説しています。</p>
+  <p class="note" style="margin-top:10px;">なぜこの形になるのかは、実際に立体を切断してみるのが一番わかりやすいため、3Dアニメーションページで解説しています。</p>
 </div>
 
 <div class="cta">
