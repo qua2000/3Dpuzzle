@@ -92,13 +92,6 @@
   .elevation-wrap { margin-top: 8px; }
   .elevation-wrap svg { max-width: 150px; margin: 0 auto; }
 
-  .view-arrow {
-    text-align: center;
-    color: #7a8fa6;
-    font-size: 12.5px;
-    margin-top: 10px;
-  }
-
   .note {
     font-size: 12.5px;
     color: #7a8fa6;
@@ -180,9 +173,10 @@
     矢印の方向からみたときの、切断面は次のうちどれか。
   </p>
 
-  <!-- 平面図：上面(大円)・底面(点線の小円、同心円)・XX'線(大円の中心より下)・斜線部分(XX'線と弧に囲まれた弓形) -->
+  <!-- 平面図：上面(大円)・底面(点線の小円、同心円)・XX'線(大円の中心より下)・斜線部分(XX'線と弧に囲まれた弓形)
+       ※大円の直径・小円の直径は、下の立面図(選択肢と共通)の上辺・下辺の幅と一致させている -->
   <div class="figure-wrap">
-    <svg viewBox="0 0 220 190" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 220 200" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
           <line x1="0" y1="0" x2="0" y2="7" stroke="#a8c8e8" stroke-width="1.4"/>
@@ -191,22 +185,24 @@
 
       <text x="8" y="20" fill="#8aa0b8" font-size="13">平面図</text>
 
-      <!-- 底面(小円・点線)：上面の円と同心円 -->
+      <!-- 底面(小円・点線)：直径76＝立面図の下辺の幅と一致。上面の円と同心円 -->
       <circle cx="110" cy="90" r="38" fill="none" stroke="#5a7090" stroke-width="1.6" stroke-dasharray="4 3"/>
-      <!-- 上面(大円) -->
-      <circle cx="110" cy="90" r="68" fill="none" stroke="#c0d0e0" stroke-width="1.8"/>
+      <!-- 上面(大円)：直径120＝立面図の上辺の幅と一致 -->
+      <circle cx="110" cy="90" r="60" fill="none" stroke="#c0d0e0" stroke-width="1.8"/>
 
       <!-- 斜線部分：XX'線と大円の弧に囲まれた弓形（中心より下） -->
-      <path d="M 59 135 A 68 68 0 0 0 161 135 Z" fill="url(#hatch)" opacity="0.9"/>
+      <path d="M 65 130 A 60 60 0 0 0 155 130 Z" fill="url(#hatch)" opacity="0.9"/>
 
       <!-- XX'線（大円の中心より下を通る） -->
-      <line x1="18" y1="135" x2="202" y2="135" stroke="#e07a7a" stroke-width="1.6"/>
-      <text x="2" y="139" fill="#e07a7a" font-size="14">X</text>
-      <text x="204" y="139" fill="#e07a7a" font-size="14">X'</text>
+      <line x1="18" y1="130" x2="202" y2="130" stroke="#e07a7a" stroke-width="1.6"/>
+      <text x="2" y="134" fill="#e07a7a" font-size="14">X</text>
+      <text x="204" y="134" fill="#e07a7a" font-size="14">X'</text>
+
+      <!-- 太い矢印（問題文の「矢印の方向」を表す） -->
+      <line x1="110" y1="178" x2="110" y2="158" stroke="#c0d0e0" stroke-width="4" stroke-linecap="round"/>
+      <polygon points="110,150 102,164 118,164" fill="#c0d0e0"/>
     </svg>
   </div>
-
-  <div class="view-arrow">↓ 矢印の方向から見る</div>
 
   <!-- 立面図：選択肢の図と全く同じ座標・同じ表示サイズ(150px)にそろえる -->
   <div class="figure-wrap elevation-wrap">
@@ -285,7 +281,7 @@
     <div class="choice correct">
       <svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
         <path d="M 40 10 L 160 10 L 138 210 L 62 210 Z" fill="none" stroke="#c0d0e0" stroke-width="2.4"/>
-        <path d="M 40 10 L 160 10 Q 150 110 100 150 Q 50 110 40 10 Z" fill="url(#h5)"/>
+        <path d="M 40 10 L 160 10 L 150 90 A 53 60 0 0 1 50 90 Z" fill="url(#h5)"/>
         <defs>
           <pattern id="h5" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
             <line x1="0" y1="0" x2="0" y2="6" stroke="#7ee0b8" stroke-width="1.3"/>
