@@ -86,11 +86,23 @@
     border-radius: 8px;
     padding: 10px;
   }
-  .figure-wrap svg { width: 100%; max-width: 300px; height: auto; display: block; }
+  .figure-wrap svg { width: 100%; height: auto; display: block; }
 
-  /* 立面図（正面図）は選択肢の図と完全に同じ大きさで表示する */
-  .elevation-wrap { margin-top: 8px; }
+  /* 平面図：1単位(svgのviewBoxの1目盛り)あたり 0.75px で表示する
+     （立面図・選択肢の図と同じ拡大率にすることで、大円・小円の直径と
+     　台形の上底・下底の幅が「画面上で見た実際の長さ」として一致する） */
+  .plan-wrap svg { max-width: 165px; margin: 0 auto; }
+
+  /* 立面図（正面図）は選択肢の図と完全に同じ大きさ・同じ拡大率(0.75px/単位)で表示する */
+  .elevation-wrap { margin-top: 8px; position: relative; }
   .elevation-wrap svg { max-width: 150px; margin: 0 auto; }
+  .elevation-label {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    font-size: 13px;
+    color: #8aa0b8;
+  }
 
   .note {
     font-size: 12.5px;
@@ -173,9 +185,7 @@
     矢印の方向からみたときの、切断面は次のうちどれか。
   </p>
 
-  <!-- 平面図：上面(大円)・底面(点線の小円、同心円)・XX'線(大円の中心より下)・斜線部分(XX'線と弧に囲まれた弓形)
-       ※大円の直径・小円の直径は、下の立面図(選択肢と共通)の上辺・下辺の幅と一致させている -->
-  <div class="figure-wrap">
+  <div class="figure-wrap plan-wrap">
     <svg viewBox="0 0 220 200" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
@@ -185,27 +195,22 @@
 
       <text x="8" y="20" fill="#8aa0b8" font-size="13">平面図</text>
 
-      <!-- 底面(小円・点線)：直径76＝立面図の下辺の幅と一致。上面の円と同心円 -->
       <circle cx="110" cy="90" r="38" fill="none" stroke="#5a7090" stroke-width="1.6" stroke-dasharray="4 3"/>
-      <!-- 上面(大円)：直径120＝立面図の上辺の幅と一致 -->
       <circle cx="110" cy="90" r="60" fill="none" stroke="#c0d0e0" stroke-width="1.8"/>
 
-      <!-- 斜線部分：XX'線と大円の弧に囲まれた弓形（中心より下） -->
       <path d="M 65 130 A 60 60 0 0 0 155 130 Z" fill="url(#hatch)" opacity="0.9"/>
 
-      <!-- XX'線（大円の中心より下を通る） -->
       <line x1="18" y1="130" x2="202" y2="130" stroke="#e07a7a" stroke-width="1.6"/>
       <text x="2" y="134" fill="#e07a7a" font-size="14">X</text>
       <text x="204" y="134" fill="#e07a7a" font-size="14">X'</text>
 
-      <!-- 太い矢印（問題文の「矢印の方向」を表す） -->
       <line x1="110" y1="178" x2="110" y2="158" stroke="#c0d0e0" stroke-width="4" stroke-linecap="round"/>
       <polygon points="110,150 102,164 118,164" fill="#c0d0e0"/>
     </svg>
   </div>
 
-  <!-- 立面図：選択肢の図と全く同じ座標・同じ表示サイズ(150px)にそろえる -->
   <div class="figure-wrap elevation-wrap">
+    <span class="elevation-label">立面図</span>
     <svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
       <path d="M 40 10 L 160 10 L 138 210 L 62 210 Z" fill="none" stroke="#c0d0e0" stroke-width="2.4"/>
     </svg>
@@ -221,7 +226,6 @@
   <h2>選択肢</h2>
   <div class="choices">
 
-    <!-- 選択肢1：三角形（V字）に取り除く -->
     <div class="choice">
       <svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
         <path d="M 40 10 L 160 10 L 138 210 L 62 210 Z" fill="none" stroke="#c0d0e0" stroke-width="2.4"/>
@@ -235,7 +239,6 @@
       <span class="num">選択肢 1</span>
     </div>
 
-    <!-- 選択肢2：フラットな底の四角 -->
     <div class="choice">
       <svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
         <path d="M 40 10 L 160 10 L 138 210 L 62 210 Z" fill="none" stroke="#c0d0e0" stroke-width="2.4"/>
@@ -249,7 +252,6 @@
       <span class="num">選択肢 2</span>
     </div>
 
-    <!-- 選択肢3：底が凹んだ曲線 -->
     <div class="choice">
       <svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
         <path d="M 40 10 L 160 10 L 138 210 L 62 210 Z" fill="none" stroke="#c0d0e0" stroke-width="2.4"/>
@@ -263,7 +265,6 @@
       <span class="num">選択肢 3</span>
     </div>
 
-    <!-- 選択肢4：小さな四角（浮いている） -->
     <div class="choice">
       <svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
         <path d="M 40 10 L 160 10 L 138 210 L 62 210 Z" fill="none" stroke="#c0d0e0" stroke-width="2.4"/>
@@ -277,7 +278,6 @@
       <span class="num">選択肢 4</span>
     </div>
 
-    <!-- 選択肢5：丸みを帯びたドーム（正解） -->
     <div class="choice correct">
       <svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
         <path d="M 40 10 L 160 10 L 138 210 L 62 210 Z" fill="none" stroke="#c0d0e0" stroke-width="2.4"/>
