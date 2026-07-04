@@ -136,18 +136,17 @@
 
 <div class="controls">
   <button id="btn0" class="active" onclick="gotoStep(0)">① 元の形状</button>
-  <button id="btn1" onclick="gotoStep(1)">② 切断面XX'を表示</button>
-  <button id="btn2" onclick="gotoStep(2)">③ 切断アニメーション</button>
-  <button id="btn3" onclick="gotoStep(3)">④ 切断面を正面から見る</button>
-  <button id="btn4" onclick="gotoStep(4)">⑤ 自由に回転</button>
+  <button id="btn1" onclick="gotoStep(1)">② 平面が降りて切断</button>
+  <button id="btn2" onclick="gotoStep(2)">③ 切断面が現れる</button>
+  <button id="btn3" onclick="gotoStep(3)">④ 正面から見る</button>
 </div>
 
 <div class="info-box">
   <h2 id="info-title">① 元の円錐台（フラスタム）の形状</h2>
-  <p id="info-text">平面図は「外側の大円(上面・半径1)・内側の小円(底面、点線)」。立面図は下がすぼまった台形（下が底面で狭く、上が上面で広い）。</p>
+  <p id="info-text">平面図は「外側の大円(上面・半径1)・内側の小円(底面、点線)」。立面図は下がすぼまった台形（下が底面で狭く、上が上面で広い）。カメラは立体に対して水平・切断面に対して45度の角度に固定します。</p>
   <div class="legend">
     <div class="legend-item"><div class="legend-dot" style="background:#4488cc"></div>円錐台の本体</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#44cc88"></div>切断面（XX'平面）</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#44cc88"></div>切断平面（アニメーション／ガイド）</div>
     <div class="legend-item"><div class="legend-dot" style="background:#ffaa44"></div>残る部分の断面</div>
   </div>
 </div>
@@ -157,17 +156,16 @@
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   形状の定義（修正版）
+   形状の定義（2026/7/3までの内容から変更なし）
    ・上面（y = H）: 大円、半径 R_TOP = 1
    ・底面（y = 0）: 小円、半径 R_BOT = 0.5
-   ・切断平面：上面の円の中心から X方向に 2/3 だけ離れた位置を通り、
-     大円（平面図でみたXX'線）に対して垂直＝つまりYZ平面に平行な平面で、
-     x = OFFSET の位置で切る。
+   ・切断平面：上面の円の中心から X方向に 2/3 だけ離れた位置(x = OFFSET)を
+     通り、YZ平面に平行な平面で切断する。
    ════════════════════════════════════════════════════════════ */
-const R_TOP = 1.0;      // 上面（大円）半径
-const R_BOT = 0.5;      // 底面（小円）半径　※見た目のバランス用に0.5に設定
-const HEIGHT = 2.0;     // 高さ
-const OFFSET = R_TOP * (2 / 3); // 中心から2/3の位置で切断（x = OFFSET）
+const R_TOP = 1.0;
+const R_BOT = 0.5;
+const HEIGHT = 2.0;
+const OFFSET = R_TOP * (2 / 3);
 const SEG = 96;
 
 /* ─── シーン設定 ─── */
@@ -184,8 +182,18 @@ renderer.setSize(W(), H());
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(42, W() / H(), 0.1, 100);
-camera.position.set(0, 2.5, 6);
-camera.lookAt(0, 1.0, 0);
+
+/* ════════════════════════════════════════════════════════════
+   【今回の変更点：カメラは今後ずっと固定】
+   ①の要件：「立体と水平・切断面に対して45度の角度」の位置にカメラを置く。
+   → 以前のステップ③④で使っていたカメラ位置(4, 2.2, 5.5)をそのまま採用し、
+     以後（②③④）このカメラ位置・向きは一切変更しません。
+   ④で「切断面をカメラの正面に向ける」ときは、カメラではなく“立体の方”を
+   回転させることで実現します（詳細は gotoStep(3) 内のコメント参照）。
+   ════════════════════════════════════════════════════════════ */
+const CAMERA_POS = { x: 4, y: 2.2, z: 5.5 };
+camera.position.set(CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z);
+camera.lookAt(0, HEIGHT / 2, 0);
 
 /* ─── ライト ─── */
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
@@ -197,9 +205,7 @@ back.position.set(-3, 2, -4);
 scene.add(back);
 
 /* ════════════════════════════════════════════════════════════
-   円錐台ジオメトリ（カスタム：底面=小円・上面=大円）
-   THREE.CylinderGeometry(radiusTop, radiusBottom, height,...)
-   → radiusTop = R_TOP（上面=大円）、radiusBottom = R_BOT（底面=小円）
+   円錐台ジオメトリ（底面=小円・上面=大円）
    ════════════════════════════════════════════════════════════ */
 const frustumGeo = new THREE.CylinderGeometry(R_TOP, R_BOT, HEIGHT, SEG, 1, false);
 
@@ -214,30 +220,14 @@ const matCut = new THREE.MeshPhongMaterial({
   side: THREE.DoubleSide,
   shininess: 30,
 });
-const matPlane = new THREE.MeshPhongMaterial({
-  color: 0x44cc88,
-  transparent: true, opacity: 0.32,
-  side: THREE.DoubleSide,
-});
 
-/* ─── 全体の円錐台（ステップ0,1,2用） ─── */
+/* ─── ①で表示する、切る前の一体の円錐台 ─── */
 const frustumMesh = new THREE.Mesh(frustumGeo, matBody);
 frustumMesh.position.y = HEIGHT / 2;
 scene.add(frustumMesh);
 
-/* ─── 切断平面（半透明板）x = OFFSET、YZ平面に平行 ─── */
-const planeGeo = new THREE.PlaneGeometry(3.2, HEIGHT + 0.6);
-const planeMesh = new THREE.Mesh(planeGeo, matPlane);
-planeMesh.rotation.y = Math.PI / 2;
-planeMesh.position.set(OFFSET, HEIGHT / 2, 0);
-planeMesh.visible = false;
-scene.add(planeMesh);
-
 /* ════════════════════════════════════════════════════════════
-   切断後、残る部分（x < OFFSET 側＝中心を含む大きい方）
-   clippingPlanes で x > OFFSET をカット
-   平面の法線は (1,0,0) とし constant = -OFFSET とすることで
-   plane: dot(normal, point) + constant <= 0 を満たす側（x <= OFFSET）が残る
+   切断後、残る部分（x <= OFFSET 側＝中心を含む大きい方）
    ════════════════════════════════════════════════════════════ */
 const clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), -OFFSET);
 
@@ -251,14 +241,8 @@ const halfMesh = new THREE.Mesh(halfGeo, new THREE.MeshPhongMaterial({
 }));
 halfMesh.position.y = HEIGHT / 2;
 halfMesh.visible = false;
-scene.add(halfMesh);
 
-/* ════════════════════════════════════════════════════════════
-   取り除かれる側（x > OFFSET 側＝斜線部分・小さい方）
-   こちらは逆向きのclippingPlaneで、x < OFFSET側をカットし、
-   x > OFFSET側だけを残す。アニメーションでスライドさせて
-   「物理的に取り除かれる」様子を見せる。
-   ════════════════════════════════════════════════════════════ */
+/* ─── 取り除かれる側（x > OFFSET 側＝斜線部分・小さい方） ─── */
 const removedClipPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), OFFSET);
 const removedGeo = new THREE.CylinderGeometry(R_TOP, R_BOT, HEIGHT, SEG, 1, false);
 const removedMesh = new THREE.Mesh(removedGeo, new THREE.MeshPhongMaterial({
@@ -273,27 +257,16 @@ removedMesh.visible = false;
 scene.add(removedMesh);
 
 /* ════════════════════════════════════════════════════════════
-   切断面の形状（オレンジ）
-   ・高さ y における半径: r(y) = R_BOT + (R_TOP - R_BOT) * (y / HEIGHT)
-   ・x = OFFSET の位置で切るので、その高さでの切断面の弦の半幅は
-       halfWidth(y) = sqrt( r(y)^2 - OFFSET^2 )  (r(y) >= OFFSET の範囲のみ存在)
-   ・OFFSET が底面半径 R_BOT より大きい場合、底付近では平面が
-     円柱(底面)の外を通るため、切断面はその高さでは現れない
-     （= 底面では弦が存在せず、ある高さから切断面が始まる）
+   切断面の形状（オレンジ）：計算方法は変更なし
    ════════════════════════════════════════════════════════════ */
 function buildCrossSectionShape() {
-  const pts = [];
   const N = 64;
-  // y=0(底面)からy=HEIGHTまで、半径がOFFSET以上になる範囲を求める
-  // r(y) = R_BOT + (R_TOP-R_BOT)*(y/H) を OFFSET = r(y) で解くと
-  // y0 = H * (OFFSET - R_BOT) / (R_TOP - R_BOT)
   let yStart = 0;
   if (OFFSET > R_BOT) {
     yStart = HEIGHT * (OFFSET - R_BOT) / (R_TOP - R_BOT);
   }
   yStart = Math.max(0, Math.min(HEIGHT, yStart));
 
-  // 右側の輪郭（上向き）: yStart -> HEIGHT
   const rightPts = [];
   for (let i = 0; i <= N; i++) {
     const y = yStart + (HEIGHT - yStart) * (i / N);
@@ -301,7 +274,6 @@ function buildCrossSectionShape() {
     const halfW = Math.sqrt(Math.max(0, r * r - OFFSET * OFFSET));
     rightPts.push(new THREE.Vector2(halfW, y));
   }
-  // 左側の輪郭（下向き、対称）: HEIGHT -> yStart
   const leftPts = [];
   for (let i = N; i >= 0; i--) {
     const y = yStart + (HEIGHT - yStart) * (i / N);
@@ -318,37 +290,24 @@ function buildCrossSectionShape() {
   return { shape, yStart };
 }
 
-const { shape: csShape, yStart: csYStart } = buildCrossSectionShape();
+const { shape: csShape } = buildCrossSectionShape();
 const csGeo = new THREE.ShapeGeometry(csShape, 64);
 const csMesh = new THREE.Mesh(csGeo, matCut);
-// ShapeGeometryはXY平面上に作られる→ X軸まわりに90度回して
-// (shapeのx,y) を (z, y) にマッピングし、平面 x=OFFSET に配置する
 csMesh.rotation.y = -Math.PI / 2;
 csMesh.position.set(OFFSET, 0, 0);
 csMesh.visible = false;
-scene.add(csMesh);
 
-/* ════════════════════════════════════════════════════════════
-   上面・底面の「弓形」（切断によって現れる円の一部）
-   x <= OFFSET 側が残るので、上面(大円,R_TOP)・底面(小円,R_BOT)の
-   弓形(x<=OFFSET の部分)を作る。底面はOFFSET>R_BOTなら全く現れない。
-   ════════════════════════════════════════════════════════════ */
+/* ─── 上面・底面の弓形 ─── */
 function makeCircleSegment(radius, offsetX, color) {
-  // 円: x^2+z^2=radius^2 のうち x<=offsetX の部分（弓形）
-  if (offsetX >= radius) return null; // 平面が円の外を通る→形状なし
+  if (offsetX >= radius) return null;
   const shape = new THREE.Shape();
   const halfW = Math.sqrt(radius * radius - offsetX * offsetX);
-  const angStart = Math.atan2(halfW, offsetX);   // 上交点の角度
-  const angEnd = -angStart;                       // 下交点の角度（z負側）
-  // offsetX から円弧（大きい方、x<=offsetXの弧）をたどる
-  shape.moveTo(offsetX, halfW);
-  const N = 64;
-  // 弧をoffsetX側の反対(x=-radius方向)を通るようにangleを2π-側でまわす
   const a0 = Math.atan2(halfW, offsetX);
   const a1 = Math.atan2(-halfW, offsetX);
-  // a0 から 2π方向（-x側を経由）して a1 へ
+  shape.moveTo(offsetX, halfW);
+  const N = 64;
   let sweepStart = a0;
-  let sweepEnd = a1 - 2 * Math.PI; // 負方向に回ってx<=offsetX側を通す
+  let sweepEnd = a1 - 2 * Math.PI;
   for (let i = 0; i <= N; i++) {
     const a = sweepStart + (sweepEnd - sweepStart) * (i / N);
     shape.lineTo(radius * Math.cos(a), radius * Math.sin(a));
@@ -357,40 +316,68 @@ function makeCircleSegment(radius, offsetX, color) {
   const geo = new THREE.ShapeGeometry(shape, 64);
   const mat = new THREE.MeshPhongMaterial({ color, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(geo, mat);
-  // shapeはXY平面 → 床(XZ平面)に寝かせる。shapeのyをzに対応させる
   mesh.rotation.x = -Math.PI / 2;
   return mesh;
 }
 
 const topSegment = makeCircleSegment(R_TOP, OFFSET, 0x224488);
-if (topSegment) {
-  topSegment.position.set(0, HEIGHT + 0.002, 0);
-  topSegment.visible = false;
-  scene.add(topSegment);
-}
+if (topSegment) topSegment.position.set(0, HEIGHT + 0.002, 0);
 
 const botSegment = makeCircleSegment(R_BOT, OFFSET, 0x224488);
-if (botSegment) {
-  botSegment.position.set(0, 0.002, 0);
-  botSegment.visible = false;
-  scene.add(botSegment);
-}
+if (botSegment) botSegment.position.set(0, 0.002, 0);
 
-/* ─── グリッド・軸 ─── */
-const grid = new THREE.GridHelper(8, 16, 0x223344, 0x1a2a36);
-scene.add(grid);
+/* ════════════════════════════════════════════════════════════
+   【新規】④で回転させる「残る立体」をまとめるグループ
+   halfMesh・csMesh・上下の弓形・ガイド平面をひとまとめにし、
+   このグループごと回転させることで「立体を回転させる」を実現する。
+   ════════════════════════════════════════════════════════════ */
+const remainingGroup = new THREE.Group();
+remainingGroup.add(halfMesh);
+remainingGroup.add(csMesh);
+if (topSegment) remainingGroup.add(topSegment);
+if (botSegment) remainingGroup.add(botSegment);
+scene.add(remainingGroup);
 
-function makeAxisLine(from, to, color) {
-  const geo = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(...from), new THREE.Vector3(...to)
-  ]);
-  return new THREE.Line(geo, new THREE.LineBasicMaterial({ color }));
-}
-scene.add(makeAxisLine([-3,0,0],[3,0,0], 0x553333));
-scene.add(makeAxisLine([0,0,0],[0,4,0], 0x335533));
-scene.add(makeAxisLine([0,0,-3],[0,0,3], 0x333355));
+/* ════════════════════════════════════════════════════════════
+   【新規】②で使う、上から降りてくる正方形の切断平面
+   ・1辺の長さ = 大円の直径(2×R_TOP)より少し大きく
+   ・透明度0（完全に不透明）
+   ════════════════════════════════════════════════════════════ */
+const CUT_PLANE_SIZE = 2 * R_TOP * 1.2; // 直径2.0より少し大きい2.4
+const cutPlaneGeo = new THREE.PlaneGeometry(CUT_PLANE_SIZE, CUT_PLANE_SIZE);
+const cutPlaneMat = new THREE.MeshPhongMaterial({
+  color: 0x44cc88,
+  side: THREE.DoubleSide,
+  transparent: false, // 透明度0＝不透明
+});
+const cutPlaneMesh = new THREE.Mesh(cutPlaneGeo, cutPlaneMat);
+cutPlaneMesh.rotation.y = Math.PI / 2; // XX'切断面と同じ向き（YZ平面に平行）
+cutPlaneMesh.visible = false;
+scene.add(cutPlaneMesh);
 
-/* XX' 線（赤破線）：上面の高さで、x=OFFSETの位置を通り、Z方向に伸びる線 */
+// 平面の開始位置(上方)・終了位置(下方)。円錐台の上端(HEIGHT)・下端(0)より
+// 平面の半分のサイズぶん余裕を持たせて設定。
+const CUT_PLANE_START_Y = HEIGHT + CUT_PLANE_SIZE / 2 + 0.3;
+const CUT_PLANE_END_Y = -(CUT_PLANE_SIZE / 2 + 0.3);
+
+/* ════════════════════════════════════════════════════════════
+   【新規】②の平面が通過した後、切断位置に薄く残るガイド平面
+   （remainingGroupの子にして、④で立体と一緒に回転するようにする）
+   ════════════════════════════════════════════════════════════ */
+const guidePlaneGeo = new THREE.PlaneGeometry(3.2, HEIGHT + 0.6);
+const guidePlaneMat = new THREE.MeshPhongMaterial({
+  color: 0x44cc88,
+  transparent: true,
+  opacity: 0.15,
+  side: THREE.DoubleSide,
+});
+const guidePlaneMesh = new THREE.Mesh(guidePlaneGeo, guidePlaneMat);
+guidePlaneMesh.rotation.y = Math.PI / 2;
+guidePlaneMesh.position.set(OFFSET, HEIGHT / 2, 0);
+guidePlaneMesh.visible = false;
+remainingGroup.add(guidePlaneMesh);
+
+/* ─── 切断前に位置の目安を示すXX'線（赤破線） ─── */
 const xxGeo = new THREE.BufferGeometry().setFromPoints([
   new THREE.Vector3(OFFSET, HEIGHT + 0.05, -2.2),
   new THREE.Vector3(OFFSET, HEIGHT + 0.05, 2.2)
@@ -402,75 +389,73 @@ xxLine.computeLineDistances();
 xxLine.visible = false;
 scene.add(xxLine);
 
-/* ─── 回転操作（簡易OrbitControls） ─── */
-let isDragging = false, prevX = 0, prevY = 0;
-let rotX = 0.3, rotY = 0.4;
-let freeMode = false;
-
-canvas.addEventListener('mousedown', e => { if (freeMode) { isDragging = true; prevX = e.clientX; prevY = e.clientY; } });
-window.addEventListener('mouseup', () => isDragging = false);
-window.addEventListener('mousemove', e => {
-  if (!isDragging) return;
-  rotY += (e.clientX - prevX) * 0.01;
-  rotX += (e.clientY - prevY) * 0.01;
-  rotX = Math.max(-1.4, Math.min(1.4, rotX));
-  prevX = e.clientX; prevY = e.clientY;
-  updateCamera();
-});
-canvas.addEventListener('touchstart', e => { if (freeMode && e.touches.length===1) { isDragging=true; prevX=e.touches[0].clientX; prevY=e.touches[0].clientY; } });
-window.addEventListener('touchend', () => isDragging = false);
-window.addEventListener('touchmove', e => {
-  if (!isDragging || e.touches.length!==1) return;
-  rotY += (e.touches[0].clientX - prevX) * 0.012;
-  rotX += (e.touches[0].clientY - prevY) * 0.012;
-  rotX = Math.max(-1.4, Math.min(1.4, rotX));
-  prevX=e.touches[0].clientX; prevY=e.touches[0].clientY;
-  updateCamera();
-});
-
-function updateCamera() {
-  const r = 6.5;
-  camera.position.set(
-    r * Math.sin(rotY) * Math.cos(rotX),
-    r * Math.sin(rotX) + 1.0,
-    r * Math.cos(rotY) * Math.cos(rotX)
-  );
-  camera.lookAt(0, 1.0, 0);
+/* ─── グリッド・軸 ─── */
+const grid = new THREE.GridHelper(8, 16, 0x223344, 0x1a2a36);
+scene.add(grid);
+function makeAxisLine(from, to, color) {
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(...from), new THREE.Vector3(...to)
+  ]);
+  return new THREE.Line(geo, new THREE.LineBasicMaterial({ color }));
 }
+scene.add(makeAxisLine([-3,0,0],[3,0,0], 0x553333));
+scene.add(makeAxisLine([0,0,0],[0,4,0], 0x335533));
+scene.add(makeAxisLine([0,0,-3],[0,0,3], 0x333355));
 
-/* ─── ステップ管理 ─── */
+/* ════════════════════════════════════════════════════════════
+   【新規】④の回転角度の自動計算
+   切断面（remainingGroup）は、切る前は世界のX軸方向（+X）を向いている。
+   カメラは(CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z)に固定されているので、
+   「切断面がカメラの方を向く」ように必要な回転角(Y軸まわり)を
+   カメラの位置から自動的に計算する。
+   ※もし実際にブラウザで確認して切断面が反対（カメラの逆）を向いてしまう
+     場合は、下の FLIP_ROTATION を true に変更してください。
+   ════════════════════════════════════════════════════════════ */
+const FLIP_ROTATION = false;
+const CAMERA_ANGLE = Math.atan2(CAMERA_POS.z, CAMERA_POS.x);
+const ROTATE_TARGET = (FLIP_ROTATION ? 1 : -1) * CAMERA_ANGLE;
+
+/* ─── ステップ文言 ─── */
 const stepLabels = [
-  '① 元の円錐台を確認（自動回転）',
-  '② 切断平面 XX\'（緑）を表示',
-  '③ 切断アニメーション実行中…',
-  '④ 切断面を矢印方向（正面）から見る → 選択肢5の形！',
-  '⑤ 自由に回転して確認'
+  '① 元の円錐台を確認',
+  '② 平面が降りてきて切断中…',
+  '③ 切断面が分かれて現れる',
+  '④ 切断面が正面を向く → 選択肢5の形！'
 ];
 const infoTitles = [
   '① 元の円錐台（フラスタム）の形状',
-  '② 切断平面 XX\' の位置',
-  '③ XX\' 平面で切断・x>OFFSET側を除去',
-  '④ 矢印方向（前方）から見た切断面 ＝ 選択肢5',
-  '⑤ 自由回転モード'
+  '② 正方形の平面が上から降りてきて切断',
+  '③ 小さいほうが横に移動し、切断面が見える',
+  '④ 立体が回転し、切断面がカメラの正面を向く'
 ];
 const infoTexts = [
-  '上面（大円・半径1）が底面（小円）より大きい、逆さまの円錐台です。立面図は下がすぼまった台形になります。',
-  '上面の大円の中心から2/3の位置（x = 0.667）を通り、円に対して垂直な平面（緑）で切断します。中心は通りません。',
-  '③ 切断面より小さい方（赤）が外側へスライドして分離します。残った大きい方（青）の断面（オレンジ）が現れます。',
-  '矢印方向（正面）から見ると、切断面は上面に近いほど幅が広く、底面に近づくにつれ細くなり、ある高さで消えます（底面の小円の半径よりOFFSETが大きいため）。これが選択肢5の特徴的なドーム型の切断面です。',
-  'マウスドラッグまたはタッチで自由に回転して立体を確認できます。'
+  '上面（大円・半径1）が底面（小円）より大きい、逆さまの円錐台です。カメラは立体と水平・切断面に対して45度の角度に固定します（以後、このカメラ位置は動きません）。',
+  '不透明な正方形の板（緑）が円錐台の真上から降りてきて、中心から2/3の位置（XX\'）を通り抜けて下へ通過します（4秒）。通過し終えると、切断位置に薄い緑の板が目印として残ります。',
+  '切断された小さいほうの立体（赤）が画面に対して横方向へスライドして離れていきます（2秒）。離れるにつれて、残る立体側の切断面（オレンジ）が現れます。',
+  '残った立体がその場でくるっと回転し（2秒）、切断面（オレンジ）がカメラの正面を向いたところで止まります（静止2秒）。これが矢印方向から見た切断面＝選択肢5の形です。'
 ];
 
 let currentStep = 0;
 let animating = false;
 let animStartTime = 0;
-const ANIM_DURATION = 2000;
 
 function setVisible(objects, v) { objects.filter(Boolean).forEach(o => o.visible = v); }
 
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function easeInOutCubic(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+
+function resetAllVisuals() {
+  animating = false;
+  setVisible([frustumMesh], false);
+  setVisible([cutPlaneMesh, xxLine, removedMesh], false);
+  setVisible([halfMesh, csMesh, guidePlaneMesh, topSegment, botSegment], false);
+  removedMesh.position.x = 0;
+  removedMesh.material.opacity = 0.55;
+  remainingGroup.rotation.y = 0;
+}
+
 function gotoStep(n) {
   currentStep = n;
-  freeMode = (n === 4);
   document.querySelectorAll('.controls button').forEach((b, i) => {
     b.classList.toggle('active', i === n);
   });
@@ -478,97 +463,98 @@ function gotoStep(n) {
   document.getElementById('info-title').textContent = infoTitles[n];
   document.getElementById('info-text').textContent = infoTexts[n];
 
-  animating = false;
-  setVisible([frustumMesh], true);
-  setVisible([planeMesh, xxLine, halfMesh, csMesh, topSegment, botSegment, removedMesh], false);
-  matBody.opacity = 0.82;
-  matBody.transparent = true;
-  removedMesh.position.x = 0;
-  removedMesh.material.opacity = 0.55;
+  resetAllVisuals();
 
   if (n === 0) {
-    rotX = 0.3; rotY = 0.4; updateCamera();
+    // ① 元の形状。カメラは固定のまま、円錐台だけを表示。
+    frustumMesh.visible = true;
   }
+
   if (n === 1) {
-    planeMesh.visible = true;
+    // ② 平面が降りてきて切断。frustumMeshは一体のまま見せておき、
+    //    そこに不透明な正方形の板が上から下へスライドして通過する。
+    frustumMesh.visible = true;
     xxLine.visible = true;
-    rotX = 0.4; rotY = 0.2; updateCamera();
+    cutPlaneMesh.visible = true;
+    cutPlaneMesh.position.set(OFFSET, CUT_PLANE_START_Y, 0);
+    animating = true;
+    animStartTime = performance.now();
   }
+
   if (n === 2) {
-    // 全体の円錐台は非表示にし、代わりに「残る側」と「取り除かれる側」の
-    // 2つのメッシュを使ってアニメーションさせる
-    frustumMesh.visible = false;
-    planeMesh.visible = true;
-    xxLine.visible = true;
-    halfMesh.visible = true;       // 残る側（青）
-    removedMesh.visible = true;    // 取り除かれる側（赤）
+    // ③ 切断面が現れる。①②の結果（frustumMeshの代わりにhalfMesh+removedMesh、
+    //    ガイド平面）を最初から表示した状態にしてから、分離アニメーションを行う。
+    halfMesh.visible = true;
+    removedMesh.visible = true;
+    guidePlaneMesh.visible = true;
     removedMesh.position.x = 0;
     removedMesh.material.opacity = 0.55;
     csMesh.visible = false;
     if (topSegment) topSegment.visible = false;
     if (botSegment) botSegment.visible = false;
-    camera.position.set(4, 2.2, 5.5);
-    camera.lookAt(0, 1.0, 0);
     animating = true;
     animStartTime = performance.now();
   }
+
   if (n === 3) {
-    frustumMesh.visible = false;
+    // ④ 正面から見る。③が完了した状態（切断面が見えている状態）から、
+    //    remainingGroup全体を回転させる。
     halfMesh.visible = true;
     csMesh.visible = true;
+    guidePlaneMesh.visible = true;
     if (topSegment) topSegment.visible = true;
     if (botSegment) botSegment.visible = true;
-    camera.position.set(0, 1.0, 6.5);
-    camera.lookAt(0, 1.0, 0);
-    rotX = 0; rotY = 0;
-  }
-  if (n === 4) {
-    frustumMesh.visible = false;
-    halfMesh.visible = true;
-    csMesh.visible = true;
-    if (topSegment) topSegment.visible = true;
-    if (botSegment) botSegment.visible = true;
-    rotX = 0.3; rotY = 0.5; updateCamera();
+    removedMesh.visible = false;
+    remainingGroup.rotation.y = 0;
+    animating = true;
+    animStartTime = performance.now();
   }
 }
 
 /* ─── アニメーションループ ─── */
-let autoRotY = 0;
+const PLANE_DURATION = 4000;     // ②：平面が降りて通過するまでの時間
+const SEPARATE_DURATION = 2000;  // ③：小さい立体が離れるまでの時間
+const ROTATE_DURATION = 2000;    // ④：回転にかける時間
+const HOLD_DURATION = 2000;      // ④：回転後に静止しておく時間
+const SLIDE_DISTANCE = 2.0;      // ③：小さい立体を横に動かす距離
+
 function animate(time) {
   requestAnimationFrame(animate);
 
-  if (currentStep === 0) {
-    autoRotY += 0.004;
-    camera.position.set(
-      6 * Math.sin(autoRotY) * Math.cos(0.3),
-      6 * Math.sin(0.3) + 1.0,
-      6 * Math.cos(autoRotY) * Math.cos(0.3)
-    );
-    camera.lookAt(0, 1.0, 0);
+  if (animating && currentStep === 1) {
+    const t = Math.min((time - animStartTime) / PLANE_DURATION, 1);
+    const y = CUT_PLANE_START_Y + (CUT_PLANE_END_Y - CUT_PLANE_START_Y) * t;
+    cutPlaneMesh.position.y = y;
+    if (t >= 1) {
+      animating = false;
+      cutPlaneMesh.visible = false;
+      guidePlaneMesh.visible = true; // 通過後、薄いガイドとして残す
+    }
   }
 
   if (animating && currentStep === 2) {
+    const t = Math.min((time - animStartTime) / SEPARATE_DURATION, 1);
+    const ease = easeOutCubic(t);
+    removedMesh.position.x = ease * SLIDE_DISTANCE;
+    removedMesh.material.opacity = 0.55 * (1 - ease * 0.85);
+    if (t >= 1) {
+      animating = false;
+      removedMesh.visible = false;
+      csMesh.visible = true;
+      if (topSegment) topSegment.visible = true;
+      if (botSegment) botSegment.visible = true;
+    }
+  }
+
+  if (animating && currentStep === 3) {
     const elapsed = time - animStartTime;
-    const HOLD = 600;          // 最初に静止して見せる時間(ms)
-    const SLIDE = 1800;        // スライドにかける時間(ms)
-    const SLIDE_DISTANCE = 1.8; // 取り除く側をスライドさせる距離
-
-    if (elapsed < HOLD) {
-      // 何もしない（切断前の状態を見せる）
-      removedMesh.position.x = 0;
+    if (elapsed <= ROTATE_DURATION) {
+      const t = elapsed / ROTATE_DURATION;
+      remainingGroup.rotation.y = ROTATE_TARGET * easeInOutCubic(t);
     } else {
-      const t = Math.min((elapsed - HOLD) / SLIDE, 1);
-      // easeOutCubic でなめらかに
-      const ease = 1 - Math.pow(1 - t, 3);
-      removedMesh.position.x = ease * SLIDE_DISTANCE;
-      removedMesh.material.opacity = 0.55 * (1 - ease * 0.85);
-
-      if (t >= 1) {
+      remainingGroup.rotation.y = ROTATE_TARGET;
+      if (elapsed >= ROTATE_DURATION + HOLD_DURATION) {
         animating = false;
-        removedMesh.visible = false;
-        csMesh.visible = true;
-        if (topSegment) topSegment.visible = true;
-        if (botSegment) botSegment.visible = true;
       }
     }
   }
