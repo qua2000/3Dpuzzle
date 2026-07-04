@@ -411,7 +411,7 @@ scene.add(makeAxisLine([0,0,-3],[0,0,3], 0x333355));
    ※もし実際にブラウザで確認して切断面が反対（カメラの逆）を向いてしまう
      場合は、下の FLIP_ROTATION を true に変更してください。
    ════════════════════════════════════════════════════════════ */
-const FLIP_ROTATION = false;
+const FLIP_ROTATION = true;
 const CAMERA_ANGLE = Math.atan2(CAMERA_POS.z, CAMERA_POS.x);
 const ROTATE_TARGET = (FLIP_ROTATION ? 1 : -1) * CAMERA_ANGLE;
 
@@ -486,7 +486,7 @@ function gotoStep(n) {
     //    ガイド平面）を最初から表示した状態にしてから、分離アニメーションを行う。
     halfMesh.visible = true;
     removedMesh.visible = true;
-    guidePlaneMesh.visible = true;
+    guidePlaneMesh.visible = false; // 小さい立体が動き終わってから表示する
     removedMesh.position.x = 0;
     removedMesh.material.opacity = 0.55;
     csMesh.visible = false;
@@ -541,6 +541,7 @@ function animate(time) {
       animating = false;
       removedMesh.visible = false;
       csMesh.visible = true;
+      guidePlaneMesh.visible = true; // ここで初めてガイドを表示
       if (topSegment) topSegment.visible = true;
       if (botSegment) botSegment.visible = true;
     }
