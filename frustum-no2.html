@@ -184,12 +184,13 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(42, W() / H(), 0.1, 100);
 
 /* ════════════════════════════════════════════════════════════
-   【今回の変更点：カメラは今後ずっと固定】
+   【カメラの方針】
    ①の要件：「立体と水平・切断面に対して45度の角度」の位置にカメラを置く。
-   → 以前のステップ③④で使っていたカメラ位置(4, 2.2, 5.5)をそのまま採用し、
-     以後（②③④）このカメラ位置・向きは一切変更しません。
-   ④で「切断面をカメラの正面に向ける」ときは、カメラではなく“立体の方”を
-   回転させることで実現します（詳細は gotoStep(3) 内のコメント参照）。
+   → 以前のステップ③④で使っていたカメラ位置(4, 2.2, 5.5)をそのまま採用。
+     ①②③の間はこのカメラ位置・向きのまま一切変更しません。
+   ④「切断面をカメラの正面に向ける」は、立体を回転させるのではなく、
+   “カメラの方”を弧を描くように動かして実現します
+   （詳細は setCameraByAngle 関数・gotoStep(3) 内のコメント参照）。
    ════════════════════════════════════════════════════════════ */
 const CAMERA_POS = { x: 4, y: 2.2, z: 5.5 };
 camera.position.set(CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z);
@@ -215,10 +216,9 @@ const matBody = new THREE.MeshPhongMaterial({
   side: THREE.DoubleSide,
   shininess: 60,
 });
-const matCut = new THREE.MeshPhongMaterial({
+const matCut = new THREE.MeshBasicMaterial({
   color: 0xffaa44,
   side: THREE.DoubleSide,
-  shininess: 30,
 });
 
 /* ─── ①で表示する、切る前の一体の円錐台 ─── */
@@ -231,25 +231,33 @@ scene.add(frustumMesh);
    ════════════════════════════════════════════════════════════ */
 const clipPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), -OFFSET);
 
+/* ─── 取り除かれる側（x > OFFSET 側＝斜線部分・小さい方） ─── */
+const removedClipPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), OFFSET);
+
+/* ★★★ 修正点 ★★★
+   THREE.Plane は「normal.dot(point) + constant >= 0」側だけを表示する。
+     clipPlane        : normal=(1,0,0),  constant=-OFFSET → x >= OFFSET 側だけ表示（＝小さい方）
+     removedClipPlane : normal=(-1,0,0), constant=OFFSET  → x <= OFFSET 側だけ表示（＝大きい方）
+   つまり、変数名の意味と、実際に表示される側が逆になっていた。
+   → halfMesh（大きい方＝残る立体）には removedClipPlane（x<=OFFSET側）を、
+     removedMesh（小さい方＝消える立体）には clipPlane（x>=OFFSET側）を割り当てる。 */
 const halfGeo = new THREE.CylinderGeometry(R_TOP, R_BOT, HEIGHT, SEG, 1, false);
 const halfMesh = new THREE.Mesh(halfGeo, new THREE.MeshPhongMaterial({
   color: 0x3366aa,
   transparent: true, opacity: 0.88,
   side: THREE.DoubleSide,
-  clippingPlanes: [clipPlane],
+  clippingPlanes: [removedClipPlane],   // ← 修正: clipPlane → removedClipPlane
   shininess: 60,
 }));
 halfMesh.position.y = HEIGHT / 2;
 halfMesh.visible = false;
 
-/* ─── 取り除かれる側（x > OFFSET 側＝斜線部分・小さい方） ─── */
-const removedClipPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), OFFSET);
 const removedGeo = new THREE.CylinderGeometry(R_TOP, R_BOT, HEIGHT, SEG, 1, false);
 const removedMesh = new THREE.Mesh(removedGeo, new THREE.MeshPhongMaterial({
   color: 0xcc5555,
   transparent: true, opacity: 0.55,
   side: THREE.DoubleSide,
-  clippingPlanes: [removedClipPlane],
+  clippingPlanes: [clipPlane],          // ← 修正: removedClipPlane → clipPlane
   shininess: 40,
 }));
 removedMesh.position.y = HEIGHT / 2;
@@ -314,7 +322,7 @@ function makeCircleSegment(radius, offsetX, color) {
   }
   shape.closePath();
   const geo = new THREE.ShapeGeometry(shape, 64);
-  const mat = new THREE.MeshPhongMaterial({ color, side: THREE.DoubleSide });
+  const mat = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
   return mesh;
@@ -373,7 +381,7 @@ const guidePlaneMat = new THREE.MeshPhongMaterial({
 });
 const guidePlaneMesh = new THREE.Mesh(guidePlaneGeo, guidePlaneMat);
 guidePlaneMesh.rotation.y = Math.PI / 2;
-guidePlaneMesh.position.set(OFFSET, HEIGHT / 2, 0);
+guidePlaneMesh.position.set(OFFSET - 0.03, HEIGHT / 2, 0); // 切断面と重ならないよう少し奥にずらす
 guidePlaneMesh.visible = false;
 remainingGroup.add(guidePlaneMesh);
 
@@ -403,36 +411,41 @@ scene.add(makeAxisLine([0,0,0],[0,4,0], 0x335533));
 scene.add(makeAxisLine([0,0,-3],[0,0,3], 0x333355));
 
 /* ════════════════════════════════════════════════════════════
-   【新規】④の回転角度の自動計算
-   切断面（remainingGroup）は、切る前は世界のX軸方向（+X）を向いている。
-   カメラは(CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z)に固定されているので、
-   「切断面がカメラの方を向く」ように必要な回転角(Y軸まわり)を
-   カメラの位置から自動的に計算する。
-   ※もし実際にブラウザで確認して切断面が反対（カメラの逆）を向いてしまう
-     場合は、下の FLIP_ROTATION を true に変更してください。
+   【変更】④は「立体を回転」ではなく「カメラを動かす」方式に変更
+   切断面は世界のX軸方向（+X）を向いているため、カメラをY軸まわりに
+   弧を描くように動かし、最終的にX軸上（切断面の真正面）まで
+   移動させる。カメラの高さ・原点からの距離は変えない（＝立体の
+   周りをぐるっと回り込むイメージ）。
    ════════════════════════════════════════════════════════════ */
-const FLIP_ROTATION = true;
-const CAMERA_ANGLE = Math.atan2(CAMERA_POS.z, CAMERA_POS.x);
-const ROTATE_TARGET = (FLIP_ROTATION ? 1 : -1) * CAMERA_ANGLE;
+const CAMERA_RADIUS = Math.sqrt(CAMERA_POS.x ** 2 + CAMERA_POS.z ** 2);
+const CAMERA_START_ANGLE = Math.atan2(CAMERA_POS.z, CAMERA_POS.x); // 現在の角度
+const CAMERA_TARGET_ANGLE = 0; // X軸上（切断面の正面）＝角度0
+
+function setCameraByAngle(angle) {
+  camera.position.x = CAMERA_RADIUS * Math.cos(angle);
+  camera.position.z = CAMERA_RADIUS * Math.sin(angle);
+  camera.position.y = CAMERA_POS.y;
+  camera.lookAt(0, HEIGHT / 2, 0);
+}
 
 /* ─── ステップ文言 ─── */
 const stepLabels = [
   '① 元の円錐台を確認',
   '② 平面が降りてきて切断中…',
   '③ 切断面が分かれて現れる',
-  '④ 切断面が正面を向く → 選択肢5の形！'
+  '④ 立体はそのまま、カメラが切断面の正面へ回り込む'
 ];
 const infoTitles = [
   '① 元の円錐台（フラスタム）の形状',
   '② 正方形の平面が上から降りてきて切断',
   '③ 小さいほうが横に移動し、切断面が見える',
-  '④ 立体が回転し、切断面がカメラの正面を向く'
+  '④ カメラが弧を描いて切断面の正面へ移動'
 ];
 const infoTexts = [
-  '上面（大円・半径1）が底面（小円）より大きい、逆さまの円錐台です。カメラは立体と水平・切断面に対して45度の角度に固定します（以後、このカメラ位置は動きません）。',
+  '上面（大円・半径1）が底面（小円）より大きい、逆さまの円錐台です。カメラは立体と水平・切断面に対して45度の角度に配置します（②③の間はこの位置のまま動きません。④で切断面の正面まで動きます）。',
   '不透明な正方形の板（緑）が円錐台の真上から降りてきて、中心から2/3の位置（XX\'）を通り抜けて下へ通過します（4秒）。通過し終えると、切断位置に薄い緑の板が目印として残ります。',
-  '切断された小さいほうの立体（赤）が画面に対して横方向へスライドして離れていきます（2秒）。離れるにつれて、残る立体側の切断面（オレンジ）が現れます。',
-  '残った立体がその場でくるっと回転し（2秒）、切断面（オレンジ）がカメラの正面を向いたところで止まります（静止2秒）。これが矢印方向から見た切断面＝選択肢5の形です。'
+  '切断された小さいほうの立体（赤）が画面に対して横方向へスライドしながら、だんだん透明になって消えていきます（2秒）。消えるにつれて、残る立体側の切断面（オレンジ）がはっきり見えるようになります。',
+  '残った立体はその場から動かず、カメラのほうが弧を描くように2秒かけて回り込み、切断面（オレンジ）の真正面で止まります（静止2秒）。これが矢印方向から見た切断面＝選択肢5の形です。'
 ];
 
 let currentStep = 0;
@@ -451,7 +464,9 @@ function resetAllVisuals() {
   setVisible([halfMesh, csMesh, guidePlaneMesh, topSegment, botSegment], false);
   removedMesh.position.x = 0;
   removedMesh.material.opacity = 0.55;
-  remainingGroup.rotation.y = 0;
+  clipPlane.constant = -OFFSET; // ★修正: 立体の位置リセットに合わせて境界線もリセット
+  camera.position.set(CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z);
+  camera.lookAt(0, HEIGHT / 2, 0);
 }
 
 function gotoStep(n) {
@@ -466,13 +481,10 @@ function gotoStep(n) {
   resetAllVisuals();
 
   if (n === 0) {
-    // ① 元の形状。カメラは固定のまま、円錐台だけを表示。
     frustumMesh.visible = true;
   }
 
   if (n === 1) {
-    // ② 平面が降りてきて切断。frustumMeshは一体のまま見せておき、
-    //    そこに不透明な正方形の板が上から下へスライドして通過する。
     frustumMesh.visible = true;
     xxLine.visible = true;
     cutPlaneMesh.visible = true;
@@ -482,11 +494,9 @@ function gotoStep(n) {
   }
 
   if (n === 2) {
-    // ③ 切断面が現れる。①②の結果（frustumMeshの代わりにhalfMesh+removedMesh、
-    //    ガイド平面）を最初から表示した状態にしてから、分離アニメーションを行う。
     halfMesh.visible = true;
     removedMesh.visible = true;
-    guidePlaneMesh.visible = false; // 小さい立体が動き終わってから表示する
+    guidePlaneMesh.visible = false;
     removedMesh.position.x = 0;
     removedMesh.material.opacity = 0.55;
     csMesh.visible = false;
@@ -497,26 +507,23 @@ function gotoStep(n) {
   }
 
   if (n === 3) {
-    // ④ 正面から見る。③が完了した状態（切断面が見えている状態）から、
-    //    remainingGroup全体を回転させる。
     halfMesh.visible = true;
     csMesh.visible = true;
     guidePlaneMesh.visible = true;
     if (topSegment) topSegment.visible = true;
     if (botSegment) botSegment.visible = true;
     removedMesh.visible = false;
-    remainingGroup.rotation.y = 0;
     animating = true;
     animStartTime = performance.now();
   }
 }
 
 /* ─── アニメーションループ ─── */
-const PLANE_DURATION = 4000;     // ②：平面が降りて通過するまでの時間
-const SEPARATE_DURATION = 2000;  // ③：小さい立体が離れるまでの時間
-const ROTATE_DURATION = 2000;    // ④：回転にかける時間
-const HOLD_DURATION = 2000;      // ④：回転後に静止しておく時間
-const SLIDE_DISTANCE = 2.0;      // ③：小さい立体を横に動かす距離
+const PLANE_DURATION = 4000;      // ②：平面が降りて通過するまでの時間
+const SEPARATE_DURATION = 2000;   // ③：小さい立体が離れるまでの時間
+const ROTATE_DURATION = 2000;     // ④：回転にかける時間
+const HOLD_DURATION = 2000;
+const SLIDE_DISTANCE = 2.0;
 
 function animate(time) {
   requestAnimationFrame(animate);
@@ -528,7 +535,7 @@ function animate(time) {
     if (t >= 1) {
       animating = false;
       cutPlaneMesh.visible = false;
-      guidePlaneMesh.visible = true; // 通過後、薄いガイドとして残す
+      guidePlaneMesh.visible = true;
     }
   }
 
@@ -536,12 +543,16 @@ function animate(time) {
     const t = Math.min((time - animStartTime) / SEPARATE_DURATION, 1);
     const ease = easeOutCubic(t);
     removedMesh.position.x = ease * SLIDE_DISTANCE;
-    removedMesh.material.opacity = 0.55 * (1 - ease * 0.85);
+    removedMesh.material.opacity = 0.55 * (1 - ease);
+    // ★修正: clippingPlanesは空間上の固定位置なので、立体の移動量ぶん
+    //         境界線(clipPlane)も一緒にずらして「切る場所」を追従させる。
+    //         これをしないと、動くにつれて切られていない部分まで見えてしまう。
+    clipPlane.constant = -(OFFSET + removedMesh.position.x);
     if (t >= 1) {
       animating = false;
       removedMesh.visible = false;
       csMesh.visible = true;
-      guidePlaneMesh.visible = true; // ここで初めてガイドを表示
+      guidePlaneMesh.visible = true;
       if (topSegment) topSegment.visible = true;
       if (botSegment) botSegment.visible = true;
     }
@@ -550,10 +561,11 @@ function animate(time) {
   if (animating && currentStep === 3) {
     const elapsed = time - animStartTime;
     if (elapsed <= ROTATE_DURATION) {
-      const t = elapsed / ROTATE_DURATION;
-      remainingGroup.rotation.y = ROTATE_TARGET * easeInOutCubic(t);
+      const t = easeInOutCubic(Math.min(elapsed / ROTATE_DURATION, 1));
+      const angle = CAMERA_START_ANGLE + (CAMERA_TARGET_ANGLE - CAMERA_START_ANGLE) * t;
+      setCameraByAngle(angle);
     } else {
-      remainingGroup.rotation.y = ROTATE_TARGET;
+      setCameraByAngle(CAMERA_TARGET_ANGLE);
       if (elapsed >= ROTATE_DURATION + HOLD_DURATION) {
         animating = false;
       }
