@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>No.2 円錐台の切断面（連続版・デバッグ）</title>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 500;
+    color: #a8c8e8;
+    margin: 12px 0 4px;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #7a8fa6;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  #canvas-container {
+    width: min(700px, 100%);
+    aspect-ratio: 4/3;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #2a3a52;
+    background: #0d1117;
+    position: relative;
+  }
+  canvas { display: block; width: 100% !important; height: 100% !important; }
+  .controls {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    width: min(700px, 100%);
+  }
+  button {
+    padding: 9px 18px;
+    border-radius: 8px;
+    border: 1px solid #3a5070;
+    background: #1e2d42;
+    color: #a8c8e8;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  button:hover { background: #28405e; }
+  .info-box {
+    margin-top: 14px;
+    width: min(700px, 100%);
+    background: #141d2b;
+    border: 1px solid #2a3a52;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 13.5px;
+    line-height: 1.75;
+    color: #c0d0e0;
+  }
+  .info-box h2 { font-size: 14px; color: #7ab0d8; margin-bottom: 6px; font-weight: 500; }
+  .step-label {
+    position: absolute;
+    top: 12px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.55);
+    color: #90c0e8;
+    font-size: 13px;
+    padding: 4px 14px;
+    border-radius: 20px;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .legend {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #8aa0b8; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<h1>No.2　円錐台の切断面（連続アニメーション版・デバッグ）</h1>
+<p class="subtitle">平面が切りながら断面を赤く着色 → そのままカメラが正面へ回り込みます</p>
+
+<div id="canvas-container">
+  <div class="step-label" id="step-label">切断中…</div>
+  <canvas id="c"></canvas>
+  <div id="debug-info" style="position:absolute;top:40px;left:8px;background:rgba(0,0,0,0.7);color:#0f0;font-size:12px;padding:6px 10px;border-radius:6px;font-family:monospace;white-space:pre;pointer-events:none;"></div>
+</div>
+
+<div class="controls">
+  <button onclick="playAnimation()">▶ 最初から再生</button>
+</div>
+
+<div class="info-box">
+  <h2>円錐台の切断＋正面確認（連続アニメーション）</h2>
+  <p>正方形の平面（緑）が円錐台を上から切りながら下へ通過します。平面の下辺が通り過ぎた部分から、切断面（赤）が動きと同じ速さで徐々に見えてきます。切断が終わると、カメラが弧を描いて切断面の正面へ回り込み、静止します。</p>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#4488cc"></div>円錐台の本体（半透明）</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#44cc88"></div>切断平面／ガイド</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dd3333"></div>切断面（赤）</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   形状定義（Frustum no2と同じ）
+   ════════════════════════════════════════════════════════════ */
+const R_TOP = 1.0;
+const R_BOT = 0.5;
+const HEIGHT = 2.0;
+const OFFSET = R_TOP * (2 / 3);
+const SEG = 96;
+
+const container = document.getElementById('canvas-container');
+const canvas = document.getElementById('c');
+const W = () => container.clientWidth;
+const H = () => container.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x0d1117);
+renderer.localClippingEnabled = true;
+renderer.setSize(W(), H());
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, W() / H(), 0.1, 100);
+
+/* カメラ：開始位置を「真横（90度）・斜め上30度」に変更
+   （以前は45度付近・斜め上18度ほどだったが、真横から始めることで
+   小さい立体側がより認識しやすくなるとのご要望を反映） */
+const CAMERA_POS = { x: 0, y: 4.45, z: 5.98 };
+camera.position.set(CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z);
+camera.lookAt(0, HEIGHT / 2, 0);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(3, 6, 4);
+scene.add(dir);
+const back = new THREE.DirectionalLight(0x8899bb, 0.3);
+back.position.set(-3, 2, -4);
+scene.add(back);
+
+/* ════════════════════════════════════════════════════════════
+   円錐台（今回は分割しない。1つの立体のまま、透明度をやや上げて表示）
+   ════════════════════════════════════════════════════════════ */
+const frustumGeo = new THREE.CylinderGeometry(R_TOP, R_BOT, HEIGHT, SEG, 1, false);
+const matBody = new THREE.MeshPhongMaterial({
+  color: 0x3366aa,
+  transparent: true,
+  opacity: 0.5,           // ★(1) 以前(0.82)より透明度を上げた（=より透ける）
+  side: THREE.DoubleSide,
+  shininess: 60,
+  depthWrite: false,      // ★今回追加：奥にある断面を隠さないようにする
+});
+const frustumMesh = new THREE.Mesh(frustumGeo, matBody);
+frustumMesh.position.y = HEIGHT / 2;
+frustumMesh.renderOrder = 0;  // ★今回追加：一番最初（一番奥）に描く
+scene.add(frustumMesh);
+
+/* ★今回追加：円錐台の「稜線」（輪郭線）をワイヤーフレームで追加。
+   壁を透明にしただけだと、立方体のように角がないため輪郭が弱く、
+   「立体である感じ」が薄れてしまう。上下の円周＋縦の線を描くことで、
+   透けていても元の立体の形がはっきりわかるようにする。 */
+const WIREFRAME_COLOR = 0x7fb0d8;
+function makeRimCircle(radius, y, segments = 80) {
+  const pts = [];
+  for (let i = 0; i <= segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    pts.push(new THREE.Vector3(radius * Math.cos(a), y, radius * Math.sin(a)));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineBasicMaterial({ color: WIREFRAME_COLOR, transparent: true, opacity: 0.6 });
+  const line = new THREE.Line(geo, mat);
+  line.renderOrder = 0.4;
+  return line;
+}
+const topRimLine = makeRimCircle(R_TOP, HEIGHT);
+const bottomRimLine = makeRimCircle(R_BOT, 0);
+scene.add(topRimLine, bottomRimLine);
+
+/* ★今回変更：縦線が「気になる」とのご指摘を受け、いったん全て削除。
+   上下の円だけでも、透明な壁と合わせて立体の大まかな形は伝わるはず。
+   もし物足りない場合は、本数を絞って（例：4本だけ）復活させることも可能。 */
+
+/* ★今回追加：切断平面が円錐台の表面と交わる「窓の縁」を、
+   目立つオレンジ色の線でなぞって表示する。これにより、
+   ManimCEの立方体の例のように「くり抜かれた小さい立体の形」が
+   輪郭線としてはっきりわかるようになる。断面の赤色が広がっていく
+   のと同じタイミング・範囲でこの線も伸びていくよう、
+   redRevealPlaneで同じようにクリッピングする。 */
+function makeBoundaryHighlightLine(pts2d) {
+  const pts3d = pts2d.map(p => new THREE.Vector3(p.x, p.y, 0));
+  // ★今回変更：THREE.Lineは環境によって太さの指定(linewidth)が効かないため、
+  //   実際に太さを持つ「細い筒」(TubeGeometry)に変更し、確実に太い線として見せる。
+  const curve = new THREE.CatmullRomCurve3(pts3d);
+  const TUBE_RADIUS = 0.014; // ★調整：太すぎるとのご指摘のため、最初の細い線と前回の太さの中間に変更
+  const geo = new THREE.TubeGeometry(curve, 96, TUBE_RADIUS, 8, false);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffa733,
+    transparent: true,
+    opacity: 0.95,
+    clippingPlanes: [redRevealPlane],
+    depthWrite: false,
+  });
+  const tube = new THREE.Mesh(geo, mat);
+  tube.rotation.y = -Math.PI / 2;
+  tube.position.set(OFFSET, 0, 0.002); // ごくわずかに手前へずらしてZファイティング防止
+  tube.renderOrder = 2.6;
+  return tube;
+}
+
+/* ════════════════════════════════════════════════════════════
+   切断面の形状（赤）：Frustum no2と同じ計算方法で断面の形を作る。
+   ただし、平面の通過に合わせて「上から下へ」徐々に見せるため、
+   Y方向のクリッピング平面(redRevealPlane)を使って表示範囲を制御する。
+   ════════════════════════════════════════════════════════════ */
+function buildCrossSectionShape() {
+  const N = 64;
+  let yStart = 0;
+  if (OFFSET > R_BOT) {
+    yStart = HEIGHT * (OFFSET - R_BOT) / (R_TOP - R_BOT);
+  }
+  yStart = Math.max(0, Math.min(HEIGHT, yStart));
+
+  const rightPts = [];
+  for (let i = 0; i <= N; i++) {
+    const y = yStart + (HEIGHT - yStart) * (i / N);
+    const r = R_BOT + (R_TOP - R_BOT) * (y / HEIGHT);
+    const halfW = Math.sqrt(Math.max(0, r * r - OFFSET * OFFSET));
+    rightPts.push(new THREE.Vector2(halfW, y));
+  }
+  const leftPts = [];
+  for (let i = N; i >= 0; i--) {
+    const y = yStart + (HEIGHT - yStart) * (i / N);
+    const r = R_BOT + (R_TOP - R_BOT) * (y / HEIGHT);
+    const halfW = Math.sqrt(Math.max(0, r * r - OFFSET * OFFSET));
+    leftPts.push(new THREE.Vector2(-halfW, y));
+  }
+
+  const shape = new THREE.Shape();
+  shape.moveTo(rightPts[0].x, rightPts[0].y);
+  rightPts.forEach(p => shape.lineTo(p.x, p.y));
+  leftPts.forEach(p => shape.lineTo(p.x, p.y));
+  shape.closePath();
+  return { shape, yStart, rightPts, leftPts };
+}
+
+const { shape: csShape, yStart: CS_Y_START, rightPts: CS_RIGHT_PTS, leftPts: CS_LEFT_PTS } = buildCrossSectionShape();
+const csGeo = new THREE.ShapeGeometry(csShape, 64);
+
+/* 赤く塗る範囲をコントロールするクリッピング平面。
+   normal=(0,1,0), constant=-currentY とすると、y >= currentY の範囲だけが
+   表示される。currentYを、切断平面の下辺のY座標に毎フレーム同期させることで
+   「平面が通り過ぎた場所（上側）から赤くなっていく」を実現する。 */
+const redRevealPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(HEIGHT + 10)); // 初期状態:何も見えない
+
+const boundaryLineRight = makeBoundaryHighlightLine(CS_RIGHT_PTS);
+const boundaryLineLeft = makeBoundaryHighlightLine(CS_LEFT_PTS);
+scene.add(boundaryLineRight, boundaryLineLeft);
+
+/* ★今回追加：大円（上端）の部分で、切断がはじまる場所の直線（横線）。
+   これまで左右2本のカーブだけを輪郭線にしていたが、上端の横一直線
+   （切断平面が最初に円錐台の上のふちと交わる場所）も同じ色で
+   なぞることで、ManimCEの例のように断面の3辺すべてが
+   ハイライトされた状態に近づける。 */
+const topEdgeRight = CS_RIGHT_PTS[CS_RIGHT_PTS.length - 1]; // 右カーブの一番上（y=HEIGHT）
+const topEdgeLeft = CS_LEFT_PTS[0];                          // 左カーブの一番上（y=HEIGHT）
+const boundaryLineTop = makeBoundaryHighlightLine([topEdgeRight, topEdgeLeft]);
+scene.add(boundaryLineTop);
+
+/* ★修正: 断面が「べったり不透明な赤」だと、透け感のある立体の中で
+   浮いて見えてしまい、小さい立体全体が消えていくように見える、との
+   ご指摘を反映。「薄い赤の下地」＋「赤い斜線のハッチング模様」の
+   2枚重ねにして、製図でよくある断面のハッチング表現に近づける。 */
+
+// (a) 薄い赤の下地（半透明の単色）
+const matCutBase = new THREE.MeshBasicMaterial({
+  color: 0xdd3333,
+  transparent: true,
+  opacity: 0.28,
+  side: THREE.DoubleSide,
+  clippingPlanes: [redRevealPlane],
+  depthWrite: false,      // ★今回追加
+});
+const csMeshBase = new THREE.Mesh(csGeo, matCutBase);
+csMeshBase.rotation.y = -Math.PI / 2;
+csMeshBase.position.set(OFFSET, 0, 0);
+csMeshBase.renderOrder = 1;  // ★今回追加：壁の次に描く
+scene.add(csMeshBase);
+
+// (b) 赤い斜線のハッチング模様（Canvasで生成したテクスチャ）
+function makeHatchTexture() {
+  const size = 64;
+  const cnv = document.createElement('canvas');
+  cnv.width = size; cnv.height = size;
+  const ctx = cnv.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+  ctx.strokeStyle = 'rgba(255,90,90,0.95)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  for (let i = -size; i < size * 2; i += 14) {
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i + size, size);
+  }
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(cnv);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 3); // 断面の大きさに対する斜線の密度（多いほど線が細かくなる）
+  return tex;
+}
+const hatchTexture = makeHatchTexture();
+const matCutHatch = new THREE.MeshBasicMaterial({
+  map: hatchTexture,
+  transparent: true,
+  side: THREE.DoubleSide,
+  clippingPlanes: [redRevealPlane],
+  depthWrite: false,      // ★今回追加
+});
+const csMeshHatch = new THREE.Mesh(csGeo, matCutHatch);
+csMeshHatch.rotation.y = -Math.PI / 2;
+csMeshHatch.position.set(OFFSET + 0.003, 0, 0); // 下地とのZファイティング防止でごくわずかにずらす
+csMeshHatch.renderOrder = 2;  // ★今回追加：下地の次に描く
+scene.add(csMeshHatch);
+
+/* ════════════════════════════════════════════════════════════
+   上から降りてくる正方形の切断平面（緑）。Frustum no2と同じ寸法・仕組み。
+   ════════════════════════════════════════════════════════════ */
+const CUT_PLANE_SIZE = 2 * R_TOP * 1.2;
+const cutPlaneGeo = new THREE.PlaneGeometry(CUT_PLANE_SIZE, CUT_PLANE_SIZE);
+const cutPlaneMat = new THREE.MeshPhongMaterial({
+  color: 0x44cc88,
+  side: THREE.DoubleSide,
+  transparent: true,
+  opacity: 0.85,        // ★(1) 完全な不透明(1.0)から少し透明度を上げた
+  depthWrite: false,    // ★今回追加
+});
+const cutPlaneMesh = new THREE.Mesh(cutPlaneGeo, cutPlaneMat);
+cutPlaneMesh.rotation.y = Math.PI / 2;
+cutPlaneMesh.renderOrder = 3;  // ★今回追加：一番手前（一番最後）に描く
+scene.add(cutPlaneMesh);
+
+const CUT_PLANE_START_Y = HEIGHT + CUT_PLANE_SIZE / 2 + 0.3;
+const CUT_PLANE_END_Y = -(CUT_PLANE_SIZE / 2 + 0.3);
+
+/* 通過後に切断位置へ残す薄いガイド平面（Frustum no2と同じ考え方） */
+const guidePlaneGeo = new THREE.PlaneGeometry(3.2, HEIGHT + 0.6);
+const guidePlaneMat = new THREE.MeshPhongMaterial({
+  color: 0x44cc88,
+  transparent: true,
+  opacity: 0.15,
+  side: THREE.DoubleSide,
+  depthWrite: false,    // ★今回追加
+});
+const guidePlaneMesh = new THREE.Mesh(guidePlaneGeo, guidePlaneMat);
+guidePlaneMesh.rotation.y = Math.PI / 2;
+guidePlaneMesh.position.set(OFFSET - 0.03, HEIGHT / 2, 0);
+guidePlaneMesh.renderOrder = 3;  // ★今回追加：カメラ回転中も断面より手前に描く
+guidePlaneMesh.visible = false;
+scene.add(guidePlaneMesh);
+
+/* ─── グリッド・軸（見た目の目安） ─── */
+const grid = new THREE.GridHelper(8, 16, 0x223344, 0x1a2a36);
+scene.add(grid);
+function makeAxisLine(from, to, color) {
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(...from), new THREE.Vector3(...to)
+  ]);
+  return new THREE.Line(geo, new THREE.LineBasicMaterial({ color }));
+}
+scene.add(makeAxisLine([-3,0,0],[3,0,0], 0x553333));
+scene.add(makeAxisLine([0,0,0],[0,4,0], 0x335533));
+scene.add(makeAxisLine([0,0,-3],[0,0,3], 0x333355));
+
+/* ════════════════════════════════════════════════════════════
+   カメラの動き（今回変更：2段階に分離）
+   ①水平に90度回り込む（真横→正面、高さ・仰角は30度のまま）
+   ②正面に到達したあと、仰角を30度→0度まで下げる（水平に戻す）
+   ════════════════════════════════════════════════════════════ */
+const CAMERA_TARGET_Y = HEIGHT / 2;
+const CAMERA_DISTANCE = Math.sqrt(
+  CAMERA_POS.x ** 2 + (CAMERA_POS.y - CAMERA_TARGET_Y) ** 2 + CAMERA_POS.z ** 2
+);
+const CAMERA_AZ_START = Math.atan2(CAMERA_POS.z, CAMERA_POS.x); // 開始の方位角（90度）
+const CAMERA_AZ_END = 0;                                         // 正面（0度）
+const CAMERA_ELEV_START = Math.atan2(
+  CAMERA_POS.y - CAMERA_TARGET_Y,
+  Math.sqrt(CAMERA_POS.x ** 2 + CAMERA_POS.z ** 2)
+); // 開始の仰角（30度）
+const CAMERA_ELEV_END = 0; // 水平まで下げる
+
+function setCameraBySpherical(azimuth, elevation) {
+  const rH = CAMERA_DISTANCE * Math.cos(elevation);
+  const y = CAMERA_TARGET_Y + CAMERA_DISTANCE * Math.sin(elevation);
+  camera.position.set(rH * Math.cos(azimuth), y, rH * Math.sin(azimuth));
+  camera.lookAt(0, CAMERA_TARGET_Y, 0);
+}
+
+/* ════════════════════════════════════════════════════════════
+   アニメーション本体
+   Phase 1: 平面が切断しながら断面を赤く着色（Frustum no2の③と同じ2秒）
+   Phase 2: カメラが正面へ回り込み（Frustum no2の④と同じ2秒＋静止2秒）
+   ════════════════════════════════════════════════════════════ */
+const PLANE_DURATION = 8000;   // 確認用に延長中（本番は2000にする想定）
+const ROTATE_DURATION = 6000;  // 確認用に延長中（本番は2000にする想定）　①水平回転
+const TILT_DURATION = 4000;    // 確認用に延長中（本番は追って調整）　　　②仰角を下げる
+const HOLD_DURATION = 3000;    // 確認用に延長中（本番は2000にする想定）
+
+let phase = 0; // 0=停止, 1=切断中, 2=水平回転中, 3=仰角を下げている最中, 4=静止中
+let phaseStartTime = 0;
+
+function easeInOutCubic(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+
+function playAnimation() {
+  frustumMesh.visible = true;
+  csMeshBase.visible = true;
+  csMeshHatch.visible = true;
+  cutPlaneMesh.visible = true;
+  cutPlaneMesh.position.set(OFFSET, CUT_PLANE_START_Y, 0);
+  guidePlaneMesh.visible = false;
+  redRevealPlane.constant = -(HEIGHT + 10); // 赤を最初は非表示に戻す
+  setCameraBySpherical(CAMERA_AZ_START, CAMERA_ELEV_START);
+  document.getElementById('step-label').textContent = '切断中…';
+  phase = 1;
+  phaseStartTime = performance.now();
+}
+
+function animate(time) {
+  requestAnimationFrame(animate);
+
+  if (phase === 1) {
+    const t = Math.min((time - phaseStartTime) / PLANE_DURATION, 1);
+    const y = CUT_PLANE_START_Y + (CUT_PLANE_END_Y - CUT_PLANE_START_Y) * t;
+    cutPlaneMesh.position.y = y;
+
+    // ★(2) 平面の下辺のY座標を、断面を赤く見せる境界線に同期させる
+    const planeBottomY = y - CUT_PLANE_SIZE / 2;
+    redRevealPlane.constant = -planeBottomY;
+
+    if (t >= 1) {
+      cutPlaneMesh.visible = false;
+      guidePlaneMesh.visible = true;
+      document.getElementById('step-label').textContent = 'カメラが正面へ回り込み中…';
+      phase = 2;
+      phaseStartTime = time;
+    }
+  }
+
+  if (phase === 2) {
+    // ①水平に90度回り込む（仰角はCAMERA_ELEV_STARTのまま固定）
+    const t = easeInOutCubic(Math.min((time - phaseStartTime) / ROTATE_DURATION, 1));
+    const azimuth = CAMERA_AZ_START + (CAMERA_AZ_END - CAMERA_AZ_START) * t;
+    setCameraBySpherical(azimuth, CAMERA_ELEV_START);
+    if (t >= 1) {
+      document.getElementById('step-label').textContent = 'カメラの角度を水平に戻しています…';
+      phase = 3;
+      phaseStartTime = time;
+    }
+  }
+
+  if (phase === 3) {
+    // ②正面に到達したあと、仰角を30度→0度まで下げる（水平に戻す）
+    const t = easeInOutCubic(Math.min((time - phaseStartTime) / TILT_DURATION, 1));
+    const elevation = CAMERA_ELEV_START + (CAMERA_ELEV_END - CAMERA_ELEV_START) * t;
+    setCameraBySpherical(CAMERA_AZ_END, elevation);
+    if (t >= 1) {
+      document.getElementById('step-label').textContent = '切断面を正面から確認（静止）';
+      phase = 4;
+      phaseStartTime = time;
+    }
+  }
+
+  if (phase === 4) {
+    setCameraBySpherical(CAMERA_AZ_END, CAMERA_ELEV_END);
+    if (time - phaseStartTime >= HOLD_DURATION) {
+      phase = 0; // 完了
+    }
+  }
+
+  renderer.render(scene, camera);
+
+  const dbg = document.getElementById('debug-info');
+  if (dbg) {
+    dbg.textContent =
+      'phase = ' + phase + ' (0:停止 1:切断 2:水平回転 3:仰角を下げる 4:静止)\n' +
+      '経過時間 = ' + Math.round(time - phaseStartTime) + ' ms\n' +
+      '平面のY座標 = ' + cutPlaneMesh.position.y.toFixed(3) + '\n' +
+      '赤の境界線Y = ' + (-redRevealPlane.constant).toFixed(3) + '\n' +
+      'カメラの方位角(度) = ' + (Math.atan2(camera.position.z, camera.position.x) * 180 / Math.PI).toFixed(1) + '\n' +
+      'カメラの仰角(度) = ' + (Math.atan2(camera.position.y - CAMERA_TARGET_Y, Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2)) * 180 / Math.PI).toFixed(1);
+  }
+}
+animate(0);
+
+window.addEventListener('resize', () => {
+  renderer.setSize(W(), H());
+  camera.aspect = W() / H();
+  camera.updateProjectionMatrix();
+});
+
+playAnimation();
+</script>
+</body>
+</html>
