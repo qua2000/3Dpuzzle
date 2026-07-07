@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>空間把握パズル No.2</title>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  #app-wrap {
+    width: min(640px, 100%);
+  }
+  #canvas-container {
+    width: 100%;
+    aspect-ratio: 4/3;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid #2a3a52;
+    background: #0d1117;
+    position: relative;
+  }
+  canvas { display: block; width: 100% !important; height: 100% !important; }
+
+  /* ── 「?」マーク：円錐台と切断予定線の付近に表示する、言葉を使わない問いかけ ── */
+  #question-mark {
+    position: absolute;
+    left: 50%;
+    top: 14%;
+    transform: translate(-50%, -50%) scale(0.4);
+    font-size: 76px;
+    font-weight: 800;
+    color: #ffd166;
+    text-shadow: 0 0 18px rgba(255, 209, 102, 0.75), 0 2px 4px rgba(0,0,0,0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+    animation: qmark-bob 1.6s ease-in-out infinite;
+  }
+  #question-mark.show { opacity: 1; }
+  @keyframes qmark-bob {
+    0%, 100% { transform: translate(-50%, -50%) scale(1) translateY(0); }
+    50%      { transform: translate(-50%, -50%) scale(1) translateY(-8px); }
+  }
+
+  /* ── 正誤フィードバック（〇✕）：中央に大きく表示し、少し踊るように動く ── */
+  #feedback-icon {
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 130px; height: 130px;
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+  }
+  #feedback-icon.pop {
+    animation: feedback-pop 0.9s cubic-bezier(.34,1.56,.64,1) forwards;
+  }
+  @keyframes feedback-pop {
+    0%   { transform: translate(-50%, -50%) scale(0) rotate(-15deg); opacity: 0; }
+    35%  { transform: translate(-50%, -50%) scale(1.25) rotate(8deg); opacity: 1; }
+    55%  { transform: translate(-50%, -50%) scale(0.92) rotate(-6deg); opacity: 1; }
+    75%  { transform: translate(-50%, -50%) scale(1.08) rotate(4deg); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
+  }
+  #feedback-icon svg { width: 100%; height: 100%; }
+
+  /* ── 選択肢（1〜5）── */
+  #choices {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: nowrap;
+    opacity: 1;
+    transition: opacity 0.4s ease;
+  }
+  #choices.hidden-choices { opacity: 0; pointer-events: none; height: 0; margin-top: 0; overflow: hidden; }
+  .choice-card {
+    flex: 1 1 0;
+    max-width: 120px;
+    background: #141d2b;
+    border: 2px solid #2a3a52;
+    border-radius: 10px;
+    padding: 6px 4px 8px;
+    cursor: pointer;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  }
+  .choice-card:hover { border-color: #5a86b8; background: #182437; }
+  .choice-card:active { transform: scale(0.94); }
+  .choice-card.selected-wrong { border-color: #cc4444; animation: shake 0.4s; }
+  .choice-card.selected-correct { border-color: #3fbf6f; }
+  .choice-card.disabled { pointer-events: none; opacity: 0.55; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%      { transform: translateX(-5px); }
+    40%      { transform: translateX(5px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(4px); }
+  }
+  .choice-num {
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    color: #7a8fa6;
+    margin-top: 2px;
+    font-weight: 600;
+  }
+  .choice-card svg { width: 100%; height: auto; display: block; }
+  .wrong-badge {
+    position: absolute;
+    top: -6px; right: -6px;
+    width: 20px; height: 20px;
+    background: #cc4444;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 13px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+  .choice-card.was-wrong .wrong-badge { display: flex; }
+
+  /* ── 再生・次へ ボタン（アイコンのみ、言葉に頼らない） ── */
+  #post-controls {
+    margin-top: 16px;
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  #post-controls.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .icon-btn {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    border: 1px solid #3a5070;
+    background: #1e2d42;
+    color: #a8c8e8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+  .icon-btn:hover { background: #28405e; }
+  .icon-btn:active { transform: scale(0.92); }
+  .icon-btn svg { width: 26px; height: 26px; }
+  .icon-btn.disabled-soft { opacity: 0.4; cursor: default; }
+  .icon-btn.disabled-soft:hover { background: #1e2d42; }
+</style>
+</head>
+<body>
+
+<div id="app-wrap">
+  <div id="canvas-container">
+    <canvas id="c"></canvas>
+    <div id="question-mark">?</div>
+    <div id="feedback-icon"></div>
+  </div>
+
+  <div id="choices"></div>
+
+  <div id="post-controls">
+    <button class="icon-btn" id="btn-replay" aria-label="replay">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+        <polyline points="3 3 3 8 8 8"></polyline>
+      </svg>
+    </button>
+    <button class="icon-btn" id="btn-next" aria-label="next">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="4" y1="12" x2="20" y2="12"></line>
+        <polyline points="13 5 20 12 13 19"></polyline>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════════
+   問題データ（汎用化した構造）
+   今後 No.3 以降を追加する場合は、この配列に問題オブジェクトを
+   1つ追加するだけで動くように設計している。
+   ════════════════════════════════════════════════════════════════ */
+const QUIZ_PROBLEMS = [
+  {
+    id: 'no2-frustum',
+    frustum: { rTop: 1.0, rBot: 0.5, height: 2.0, offsetRatio: 2 / 3 }, // offset = rTop * offsetRatio
+    cameraStart: { azimuthDeg: 45, elevationDeg: 30 },
+    cameraDistance: 6.9, // animation_frustum_cutと同じ画角になるよう調整済み
+    durations: {
+      descend: 2000,     // ①平面が降りて円錐台の上面に接するまで
+      cut: 2400,         // 正解後：接触位置から下端まで切断が進む
+      rotateAz: 2000,     // 水平方向の回り込み（横45度→0度）
+      rotateElev: 1000,   // 仰角を水平に戻す（斜め上30度→0度＝正面）
+      hold: 2000          // 正面静止
+    },
+    correctChoiceId: 5,
+    choices: [
+      { id: 1, kind: 'vshape' },
+      { id: 2, kind: 'blockBottom' },
+      { id: 3, kind: 'valley' },
+      { id: 4, kind: 'floatingBlock' },
+      { id: 5, kind: 'actual' }
+    ]
+  }
+  // 次の問題を追加する場合はここに続けて記述する
+];
+
+let currentProblemIndex = 0;
+
+/* ════════════════════════════════════════════════════════════════
+   Three.js 基本セットアップ
+   ════════════════════════════════════════════════════════════════ */
+const container = document.getElementById('canvas-container');
+const canvas = document.getElementById('c');
+const W = () => container.clientWidth;
+const H = () => container.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x0d1117);
+renderer.localClippingEnabled = true;
+renderer.setSize(W(), H());
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, W() / H(), 0.1, 100);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(3, 6, 4);
+scene.add(dirLight);
+const backLight = new THREE.DirectionalLight(0x8899bb, 0.3);
+backLight.position.set(-3, 2, -4);
+scene.add(backLight);
+
+const grid = new THREE.GridHelper(8, 16, 0x223344, 0x1a2a36);
+scene.add(grid);
+
+function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+/* ════════════════════════════════════════════════════════════════
+   シーン構築（問題ごとに呼び出す。既存メッシュがあれば破棄してから作る）
+   ════════════════════════════════════════════════════════════════ */
+let sceneObjects = null; // 現在の問題で作った全メッシュをまとめて保持（後片付け用）
+
+function disposeSceneObjects() {
+  if (!sceneObjects) return;
+  Object.values(sceneObjects).forEach(obj => {
+    if (!obj) return;
+    const meshes = Array.isArray(obj) ? obj : [obj];
+    meshes.forEach(m => {
+      if (m && m.parent) scene.remove(m);
+      if (m && m.geometry) m.geometry.dispose();
+      if (m && m.material) {
+        if (m.material.map) m.material.map.dispose();
+        m.material.dispose();
+      }
+    });
+  });
+  sceneObjects = null;
+}
+
+function buildSceneForProblem(problem) {
+  disposeSceneObjects();
+
+  const R_TOP = problem.frustum.rTop;
+  const R_BOT = problem.frustum.rBot;
+  const HEIGHT = problem.frustum.height;
+  const OFFSET = R_TOP * problem.frustum.offsetRatio;
+  const SEG = 96;
+
+  /* 円錐台本体 */
+  const frustumGeo = new THREE.CylinderGeometry(R_TOP, R_BOT, HEIGHT, SEG, 1, false);
+  const matBody = new THREE.MeshPhongMaterial({
+    color: 0x3366aa, transparent: true, opacity: 0.5,
+    side: THREE.DoubleSide, shininess: 60, depthWrite: false,
+  });
+  const frustumMesh = new THREE.Mesh(frustumGeo, matBody);
+  frustumMesh.position.y = HEIGHT / 2;
+  frustumMesh.renderOrder = 0;
+  scene.add(frustumMesh);
+
+  /* 上下の縁（ワイヤーフレーム） */
+  const WIREFRAME_COLOR = 0x7fb0d8;
+  function makeRimCircle(radius, y, segments = 80) {
+    const pts = [];
+    for (let i = 0; i <= segments; i++) {
+      const a = (i / segments) * Math.PI * 2;
+      pts.push(new THREE.Vector3(radius * Math.cos(a), y, radius * Math.sin(a)));
+    }
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: WIREFRAME_COLOR, transparent: true, opacity: 0.6 });
+    const line = new THREE.Line(geo, mat);
+    line.renderOrder = 0.4;
+    return line;
+  }
+  const topRimLine = makeRimCircle(R_TOP, HEIGHT);
+  const bottomRimLine = makeRimCircle(R_BOT, 0);
+  scene.add(topRimLine, bottomRimLine);
+
+  /* クリッピング平面（赤い断面／オレンジの輪郭線を「上から下へ」出現させる） */
+  const redRevealPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(HEIGHT + 10));
+
+  function makeBoundaryHighlightLine(pts2d) {
+    const pts3d = pts2d.map(p => new THREE.Vector3(p.x, p.y, 0));
+    const curve = new THREE.CatmullRomCurve3(pts3d);
+    const TUBE_RADIUS = 0.014;
+    const geo = new THREE.TubeGeometry(curve, 96, TUBE_RADIUS, 8, false);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffa733, transparent: true, opacity: 0.95,
+      clippingPlanes: [redRevealPlane], depthWrite: false,
+    });
+    const tube = new THREE.Mesh(geo, mat);
+    tube.rotation.y = -Math.PI / 2;
+    tube.position.set(OFFSET, 0, 0.002);
+    tube.renderOrder = 2.6;
+    return tube;
+  }
+
+  /* 断面形状の計算（左右カーブ＋上端の横線） */
+  function buildCrossSectionShape() {
+    const N = 64;
+    let yStart = 0;
+    if (OFFSET > R_BOT) {
+      yStart = HEIGHT * (OFFSET - R_BOT) / (R_TOP - R_BOT);
+    }
+    yStart = Math.max(0, Math.min(HEIGHT, yStart));
+
+    const rightPts = [];
+    for (let i = 0; i <= N; i++) {
+      const y = yStart + (HEIGHT - yStart) * (i / N);
+      const r = R_BOT + (R_TOP - R_BOT) * (y / HEIGHT);
+      const halfW = Math.sqrt(Math.max(0, r * r - OFFSET * OFFSET));
+      rightPts.push(new THREE.Vector2(halfW, y));
+    }
+    const leftPts = [];
+    for (let i = N; i >= 0; i--) {
+      const y = yStart + (HEIGHT - yStart) * (i / N);
+      const r = R_BOT + (R_TOP - R_BOT) * (y / HEIGHT);
+      const halfW = Math.sqrt(Math.max(0, r * r - OFFSET * OFFSET));
+      leftPts.push(new THREE.Vector2(-halfW, y));
+    }
+    const shape = new THREE.Shape();
+    shape.moveTo(rightPts[0].x, rightPts[0].y);
+    rightPts.forEach(p => shape.lineTo(p.x, p.y));
+    leftPts.forEach(p => shape.lineTo(p.x, p.y));
+    shape.closePath();
+    return { shape, yStart, rightPts, leftPts };
+  }
+  const { shape: csShape, yStart: CS_Y_START, rightPts: CS_RIGHT_PTS, leftPts: CS_LEFT_PTS } = buildCrossSectionShape();
+  const csGeo = new THREE.ShapeGeometry(csShape, 64);
+
+  const boundaryLineRight = makeBoundaryHighlightLine(CS_RIGHT_PTS);
+  const boundaryLineLeft = makeBoundaryHighlightLine(CS_LEFT_PTS);
+  scene.add(boundaryLineRight, boundaryLineLeft);
+
+  const topEdgeRight = CS_RIGHT_PTS[CS_RIGHT_PTS.length - 1];
+  const topEdgeLeft = CS_LEFT_PTS[0];
+  const boundaryLineTop = makeBoundaryHighlightLine([topEdgeRight, topEdgeLeft]);
+  scene.add(boundaryLineTop);
+
+  /* 断面（赤下地＋ハッチング） */
+  const matCutBase = new THREE.MeshBasicMaterial({
+    color: 0xdd3333, transparent: true, opacity: 0.28, side: THREE.DoubleSide,
+    clippingPlanes: [redRevealPlane], depthWrite: false,
+  });
+  const csMeshBase = new THREE.Mesh(csGeo, matCutBase);
+  csMeshBase.rotation.y = -Math.PI / 2;
+  csMeshBase.position.set(OFFSET, 0, 0);
+  csMeshBase.renderOrder = 1;
+  scene.add(csMeshBase);
+
+  function makeHatchTexture() {
+    const size = 64;
+    const cnv = document.createElement('canvas');
+    cnv.width = size; cnv.height = size;
+    const ctx = cnv.getContext('2d');
+    ctx.clearRect(0, 0, size, size);
+    ctx.strokeStyle = 'rgba(255,90,90,0.95)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let i = -size; i < size * 2; i += 14) {
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i + size, size);
+    }
+    ctx.stroke();
+    const tex = new THREE.CanvasTexture(cnv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(4, 3);
+    return tex;
+  }
+  const hatchTexture = makeHatchTexture();
+  const matCutHatch = new THREE.MeshBasicMaterial({
+    map: hatchTexture, transparent: true, side: THREE.DoubleSide,
+    clippingPlanes: [redRevealPlane], depthWrite: false,
+  });
+  const csMeshHatch = new THREE.Mesh(csGeo, matCutHatch);
+  csMeshHatch.rotation.y = -Math.PI / 2;
+  csMeshHatch.position.set(OFFSET + 0.003, 0, 0);
+  csMeshHatch.renderOrder = 2;
+  scene.add(csMeshHatch);
+
+  /* 降りてくる切断平面（緑） */
+  const CUT_PLANE_SIZE = 2 * R_TOP * 1.2;
+  const cutPlaneGeo = new THREE.PlaneGeometry(CUT_PLANE_SIZE, CUT_PLANE_SIZE);
+  const cutPlaneMat = new THREE.MeshPhongMaterial({
+    color: 0x44cc88, side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: false,
+  });
+  const cutPlaneMesh = new THREE.Mesh(cutPlaneGeo, cutPlaneMat);
+  cutPlaneMesh.rotation.y = Math.PI / 2;
+  cutPlaneMesh.renderOrder = 3;
+  scene.add(cutPlaneMesh);
+
+  const CUT_PLANE_START_Y = HEIGHT + CUT_PLANE_SIZE / 2 + 0.3;
+  const CUT_PLANE_END_Y = -(CUT_PLANE_SIZE / 2 + 0.3);
+  const CUT_PLANE_CONTACT_Y = HEIGHT + CUT_PLANE_SIZE / 2; // 下辺が円錐台の上面(y=HEIGHT)に接する位置
+
+  /* 通過後のガイド平面 */
+  const guidePlaneGeo = new THREE.PlaneGeometry(3.2, HEIGHT + 0.6);
+  const guidePlaneMat = new THREE.MeshPhongMaterial({
+    color: 0x44cc88, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false,
+  });
+  const guidePlaneMesh = new THREE.Mesh(guidePlaneGeo, guidePlaneMat);
+  guidePlaneMesh.rotation.y = Math.PI / 2;
+  guidePlaneMesh.position.set(OFFSET - 0.03, HEIGHT / 2, 0);
+  guidePlaneMesh.renderOrder = 3;
+  guidePlaneMesh.visible = false;
+  scene.add(guidePlaneMesh);
+
+  /* カメラ球面座標ヘルパー */
+  const CAMERA_TARGET_Y = HEIGHT / 2;
+  const CAMERA_DISTANCE = problem.cameraDistance;
+  function setCameraBySpherical(azimuthRad, elevationRad) {
+    const rH = CAMERA_DISTANCE * Math.cos(elevationRad);
+    const y = CAMERA_TARGET_Y + CAMERA_DISTANCE * Math.sin(elevationRad);
+    camera.position.set(rH * Math.cos(azimuthRad), y, rH * Math.sin(azimuthRad));
+    camera.lookAt(0, CAMERA_TARGET_Y, 0);
+  }
+
+  sceneObjects = {
+    frustumMesh, topRimLine, bottomRimLine,
+    boundaryLineRight, boundaryLineLeft, boundaryLineTop,
+    csMeshBase, csMeshHatch, cutPlaneMesh, guidePlaneMesh, grid: null // gridは共有のため破棄しない
+  };
+
+  return {
+    HEIGHT, OFFSET, R_TOP, R_BOT,
+    frustumMesh, csMeshBase, csMeshHatch, cutPlaneMesh, guidePlaneMesh,
+    redRevealPlane, CUT_PLANE_SIZE, CUT_PLANE_START_Y, CUT_PLANE_END_Y, CUT_PLANE_CONTACT_Y,
+    setCameraBySpherical, CAMERA_TARGET_Y, CAMERA_DISTANCE,
+    csRightPts: CS_RIGHT_PTS, csLeftPts: CS_LEFT_PTS, csYStart: CS_Y_START
+  };
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ステートマシン
+   ════════════════════════════════════════════════════════════════
+   idle → descend → awaitAnswer → (wrong: 一時停止のまま再選択可)
+        → correct → cutting → rotateAz → rotateElev → hold → done
+   ════════════════════════════════════════════════════════════════ */
+let state = 'idle';
+let stateStartTime = 0;
+let ctx = null;      // buildSceneForProblemの戻り値
+let problem = null;
+
+const qMarkEl = document.getElementById('question-mark');
+const feedbackEl = document.getElementById('feedback-icon');
+const choicesEl = document.getElementById('choices');
+const postControlsEl = document.getElementById('post-controls');
+const btnReplay = document.getElementById('btn-replay');
+const btnNext = document.getElementById('btn-next');
+
+const CHECK_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="#3fbf6f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10.4" stroke="#3fbf6f" stroke-width="2"/><path d="M7 12.5l3.2 3.2L17 9"/></svg>`;
+const CROSS_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="#e05a5a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10.4" stroke="#e05a5a" stroke-width="2"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg>`;
+
+function startProblem(index) {
+  currentProblemIndex = index;
+  problem = QUIZ_PROBLEMS[currentProblemIndex];
+  ctx = buildSceneForProblem(problem);
+  renderChoices(problem);
+  goToState('idle');
+  beginDescend();
+}
+
+function beginDescend() {
+  ctx.frustumMesh.visible = true;
+  ctx.csMeshBase.visible = true;
+  ctx.csMeshHatch.visible = true;
+  ctx.cutPlaneMesh.visible = true;
+  ctx.cutPlaneMesh.position.set(ctx.OFFSET, ctx.CUT_PLANE_START_Y, 0);
+  ctx.guidePlaneMesh.visible = false;
+  ctx.redRevealPlane.constant = -(ctx.HEIGHT + 10);
+
+  const az = problem.cameraStart.azimuthDeg * Math.PI / 180;
+  const el = problem.cameraStart.elevationDeg * Math.PI / 180;
+  ctx.setCameraBySpherical(az, el);
+
+  qMarkEl.classList.remove('show');
+  feedbackEl.classList.remove('pop');
+  feedbackEl.innerHTML = '';
+  choicesEl.classList.add('hidden-choices');
+  postControlsEl.classList.remove('show');
+  resetChoiceCardStyles();
+
+  goToState('descend');
+}
+
+function goToState(next) {
+  state = next;
+  stateStartTime = performance.now();
+}
+
+/* ════════════════════════════════════════════════════════════════
+   選択肢の描画（SVGサムネイル）
+   ════════════════════════════════════════════════════════════════ */
+function renderChoices(problem) {
+  choicesEl.innerHTML = '';
+  problem.choices.forEach(choice => {
+    const card = document.createElement('div');
+    card.className = 'choice-card';
+    card.dataset.id = choice.id;
+    card.innerHTML = buildChoiceSVG(choice.kind, problem) + `<span class="choice-num">${choice.id}</span><span class="wrong-badge">✕</span>`;
+    card.addEventListener('click', () => onChoiceClick(choice));
+    choicesEl.appendChild(card);
+  });
+}
+
+function resetChoiceCardStyles() {
+  document.querySelectorAll('.choice-card').forEach(c => {
+    c.classList.remove('selected-wrong', 'selected-correct', 'disabled', 'was-wrong');
+  });
+}
+
+/* トラペゾイド（frustumの見え方）の枠を基準にした簡易SVG図形生成 */
+function buildChoiceSVG(kind, problem) {
+  const topY = 8, bottomY = 100;
+  const topHalf = 45, botHalf = 22; // R_TOP:R_BOT の比率に合わせた見た目
+  const cx = 50;
+  const topLeftX = cx - topHalf, topRightX = cx + topHalf;
+  const botLeftX = cx - botHalf, botRightX = cx + botHalf;
+
+  function leftXat(y) {
+    const t = (y - topY) / (bottomY - topY);
+    return topLeftX + (botLeftX - topLeftX) * t;
+  }
+  function rightXat(y) {
+    const t = (y - topY) / (bottomY - topY);
+    return topRightX + (botRightX - topRightX) * t;
+  }
+
+  const outline = `<path d="M${topLeftX},${topY} L${topRightX},${topY} L${botRightX},${bottomY} L${botLeftX},${bottomY} Z" fill="none" stroke="#7fa8cc" stroke-width="2.5"/>`;
+  const patternDef = `<defs><pattern id="hatch-${kind}" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="6" stroke="#e0645a" stroke-width="2.4"/></pattern></defs>`;
+
+  let hatchPath = '';
+
+  // 実際の正解(⑤)は上辺いっぱいまでは届かず、両端に余白ができる形状のため、
+  // ①②のダミー図も見た目をそろえて上辺の両端に同じ程度の余白を設ける。
+  const TOP_INSET = topHalf * 0.255;
+
+  if (kind === 'vshape') {
+    // ①：直線で構成された V字（頂点が底辺に接する）
+    hatchPath = `M${topLeftX + TOP_INSET},${topY} L${topRightX - TOP_INSET},${topY} L${cx},${bottomY} Z`;
+  } else if (kind === 'blockBottom') {
+    // ②：全幅に近い四角いブロックを底からある高さまで切り取った形
+    const cutY = 74;
+    hatchPath = `M${topLeftX + TOP_INSET},${topY} L${topRightX - TOP_INSET},${topY} L${rightXat(cutY)},${cutY} L${leftXat(cutY)},${cutY} Z`;
+  } else if (kind === 'valley') {
+    // ③：底の中央でくぼみ、両サイドが持ち上がる曲線
+    const h1 = 62;
+    hatchPath = `M${leftXat(topY)},${topY} L${rightXat(topY)},${topY} L${rightXat(h1)},${h1} Q${cx},${bottomY + 14} ${leftXat(h1)},${h1} Z`;
+  } else if (kind === 'floatingBlock') {
+    // ④：どの辺にも接しない、中央に浮いた小さな四角
+    hatchPath = `M${cx - 15},${44} L${cx + 15},${44} L${cx + 15},${72} L${cx - 15},${72} Z`;
+  } else if (kind === 'actual') {
+    // ⑤：実際の3Dエンジンと同じ計算式から得た正しい断面形状
+    const R_TOP = problem.frustum.rTop, R_BOT = problem.frustum.rBot, HEIGHT = problem.frustum.height;
+    const OFFSET = R_TOP * problem.frustum.offsetRatio;
+    let yStart = 0;
+    if (OFFSET > R_BOT) yStart = HEIGHT * (OFFSET - R_BOT) / (R_TOP - R_BOT);
+    yStart = Math.max(0, Math.min(HEIGHT, yStart));
+    const N = 40;
+    const rightPts = [];
+    for (let i = 0; i <= N; i++) {
+      const y = yStart + (HEIGHT - yStart) * (i / N);
+      const r = R_BOT + (R_TOP - R_BOT) * (y / HEIGHT);
+      const halfW = Math.sqrt(Math.max(0, r * r - OFFSET * OFFSET));
+      rightPts.push({ x: halfW, y });
+    }
+    const leftPts = rightPts.slice().reverse().map(p => ({ x: -p.x, y: p.y }));
+    // データ座標(x: -R_TOP..R_TOP, y: 0..HEIGHT) → SVG座標へ変換
+    const scaleX = topHalf / R_TOP;
+    function toSvg(p) {
+      const svgX = cx + p.x * scaleX;
+      const svgY = topY + (1 - p.y / HEIGHT) * (bottomY - topY);
+      return { x: svgX, y: svgY };
+    }
+    const pts = rightPts.concat(leftPts).map(toSvg);
+    hatchPath = 'M' + pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L') + ' Z';
+  }
+
+  const hatchFill = `<path d="${hatchPath}" fill="url(#hatch-${kind})" stroke="none"/>`;
+  return `<svg viewBox="0 0 100 108" xmlns="http://www.w3.org/2000/svg">${patternDef}${hatchFill}${outline}</svg>`;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   選択肢クリック時の処理
+   ════════════════════════════════════════════════════════════════ */
+function onChoiceClick(choice) {
+  if (state !== 'awaitAnswer') return;
+  const card = document.querySelector(`.choice-card[data-id="${choice.id}"]`);
+  const isCorrect = choice.id === problem.correctChoiceId;
+
+  if (isCorrect) {
+    document.querySelectorAll('.choice-card').forEach(c => c.classList.add('disabled'));
+    card.classList.add('selected-correct');
+    showFeedback(true);
+    goToState('correctPause');
+  } else {
+    card.classList.add('selected-wrong', 'was-wrong');
+    showFeedback(false);
+    goToState('wrongPause');
+    setTimeout(() => {
+      card.classList.remove('selected-wrong');
+      feedbackEl.classList.remove('pop');
+      if (state === 'wrongPause') goToState('awaitAnswer');
+    }, 700);
+  }
+}
+
+function showFeedback(correct) {
+  feedbackEl.innerHTML = correct ? CHECK_SVG : CROSS_SVG;
+  feedbackEl.classList.remove('pop');
+  void feedbackEl.offsetWidth; // reflow でアニメーションを再トリガー
+  feedbackEl.classList.add('pop');
+}
+
+/* ════════════════════════════════════════════════════════════════
+   メインループ
+   ════════════════════════════════════════════════════════════════ */
+function animate() {
+  requestAnimationFrame(animate);
+  if (!ctx) { renderer.render(scene, camera); return; }
+
+  const d = problem.durations;
+  const now = performance.now();
+  const elapsed = now - stateStartTime;
+
+  // 重要：各フレームで実行するのは必ずどれか1つの状態のみにする（else if）。
+  // 以前は if を並べていたため、1フレーム内で状態が連鎖的に進んでしまい、
+  // 切断終了と同時に回転アニメーションがすべて0秒で終わってしまうバグがあった。
+  if (state === 'descend') {
+    const t = Math.min(elapsed / d.descend, 1);
+    const y = ctx.CUT_PLANE_START_Y + (ctx.CUT_PLANE_CONTACT_Y - ctx.CUT_PLANE_START_Y) * t;
+    ctx.cutPlaneMesh.position.y = y;
+    const planeBottomY = y - ctx.CUT_PLANE_SIZE / 2;
+    ctx.redRevealPlane.constant = -planeBottomY;
+    if (t >= 1) {
+      goToState('awaitAnswer');
+      qMarkEl.classList.add('show');
+      choicesEl.classList.remove('hidden-choices');
+    }
+  } else if (state === 'awaitAnswer' || state === 'wrongPause') {
+    // 静止フレーム。平面・赤ラインは接触位置のまま。
+  } else if (state === 'correctPause') {
+    if (elapsed >= 750) {
+      qMarkEl.classList.remove('show');
+      feedbackEl.classList.remove('pop');
+      goToState('cutting');
+    }
+  } else if (state === 'cutting') {
+    const t = Math.min(elapsed / d.cut, 1);
+    const y = ctx.CUT_PLANE_CONTACT_Y + (ctx.CUT_PLANE_END_Y - ctx.CUT_PLANE_CONTACT_Y) * t;
+    ctx.cutPlaneMesh.position.y = y;
+    const planeBottomY = y - ctx.CUT_PLANE_SIZE / 2;
+    ctx.redRevealPlane.constant = -planeBottomY;
+    if (t >= 1) {
+      ctx.cutPlaneMesh.visible = false;
+      ctx.guidePlaneMesh.visible = true;
+      goToState('rotateAz');
+    }
+  } else if (state === 'rotateAz') {
+    const azStart = problem.cameraStart.azimuthDeg * Math.PI / 180;
+    const t = easeInOutCubic(Math.min(elapsed / d.rotateAz, 1));
+    const az = azStart + (0 - azStart) * t;
+    const el = problem.cameraStart.elevationDeg * Math.PI / 180;
+    ctx.setCameraBySpherical(az, el);
+    if (t >= 1) goToState('rotateElev');
+  } else if (state === 'rotateElev') {
+    const elStart = problem.cameraStart.elevationDeg * Math.PI / 180;
+    const t = easeInOutCubic(Math.min(elapsed / d.rotateElev, 1));
+    const el = elStart + (0 - elStart) * t;
+    ctx.setCameraBySpherical(0, el);
+    if (t >= 1) goToState('hold');
+  } else if (state === 'hold') {
+    ctx.setCameraBySpherical(0, 0);
+    if (elapsed >= d.hold) {
+      goToState('done');
+      postControlsEl.classList.add('show');
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  renderer.setSize(W(), H());
+  camera.aspect = W() / H();
+  camera.updateProjectionMatrix();
+});
+
+btnReplay.addEventListener('click', () => {
+  postControlsEl.classList.remove('show');
+  startProblem(currentProblemIndex);
+});
+
+btnNext.addEventListener('click', () => {
+  if (currentProblemIndex + 1 < QUIZ_PROBLEMS.length) {
+    postControlsEl.classList.remove('show');
+    startProblem(currentProblemIndex + 1);
+  } else {
+    // 次の問題が未作成の間の簡易フィードバック（アイコンを軽く揺らす）
+    btnNext.classList.add('disabled-soft');
+    btnNext.animate(
+      [{ transform: 'translateX(0)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(0)' }],
+      { duration: 300 }
+    );
+    setTimeout(() => btnNext.classList.remove('disabled-soft'), 600);
+  }
+});
+
+startProblem(0);
+</script>
+</body>
+</html>
