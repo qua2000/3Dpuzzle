@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>立方体の切断面パズル（パターン4）</title>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 500;
+    color: #a8c8e8;
+    margin: 12px 0 4px;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: #7a8fa6;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  #canvas-container {
+    width: min(700px, 100%);
+    aspect-ratio: 4/3;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #2a3a52;
+    background: #0d1117;
+    position: relative;
+  }
+  canvas { display: block; width: 100% !important; height: 100% !important; }
+
+  #question-mark {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -55%);
+    font-size: 60px;
+    font-weight: 700;
+    color: #ffffff;
+    text-shadow: 0 0 14px rgba(255,255,255,0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s;
+    animation: floatQ 2.2s ease-in-out infinite;
+  }
+  #question-mark.show { opacity: 0.92; }
+  @keyframes floatQ {
+    0%, 100% { transform: translate(-50%, -55%); }
+    50% { transform: translate(-50%, -62%); }
+  }
+
+  .result-mark {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 42px;
+    font-weight: 800;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .result-mark.correct { color: #4ade80; }
+  .result-mark.wrong { color: #f87171; }
+  .result-mark.show.correct { animation: bounceIn 0.5s ease-out forwards; }
+  .result-mark.show.wrong { animation: fadeInOut 0.6s ease-out forwards; }
+  @keyframes bounceIn {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+    60% { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
+    100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+  @keyframes fadeInOut {
+    0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 1; }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); } 40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); } 80% { transform: translateX(4px); }
+  }
+  .choice-card.shake { animation: shake 0.4s; }
+
+  #choices {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    width: min(700px, 100%);
+  }
+  .choice-card {
+    position: relative;
+    background: #141d2b;
+    border: 2px solid #2a3a52;
+    border-radius: 10px;
+    padding: 8px 4px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+  }
+  .choice-card:hover { border-color: #4a7ab0; background: #182236; }
+  .choice-card.disabled { pointer-events: none; opacity: 0.55; }
+  .choice-card.correct-flash { border-color: #4ade80; }
+  .choice-num { font-size: 11px; color: #7a8fa6; margin-top: 4px; }
+  .choice-card svg { width: 100%; height: auto; display: block; }
+
+  #end-controls {
+    margin-top: 16px;
+    display: none;
+    gap: 18px;
+  }
+  .icon-btn {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: #1e2d42;
+    border: 1px solid #3a5070;
+    color: #a8c8e8;
+    font-size: 20px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+  }
+  .icon-btn:hover { background: #28405e; }
+  .icon-btn.wiggle { animation: wiggle 0.4s; }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); }
+  }
+
+  .info-box {
+    margin-top: 16px;
+    width: min(700px, 100%);
+    background: #141d2b;
+    border: 1px solid #2a3a52;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #c0d0e0;
+  }
+  .info-box h2 { font-size: 13.5px; color: #7ab0d8; margin-bottom: 6px; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<h1>立方体の切断面パズル（パターン4）</h1>
+<p class="subtitle">頂点A（上・前左）・辺DHの中点（上後左と下後左を結ぶ辺の中点）・辺BFの中点（上前右と下前右を結ぶ辺の中点）を通る平面で切断（ひし形カット）</p>
+
+<div id="canvas-container">
+  <canvas id="c"></canvas>
+  <div id="question-mark">？</div>
+</div>
+
+<div id="choices"></div>
+
+<div id="end-controls">
+  <div class="icon-btn" id="btn-replay" title="リプレイ">▶</div>
+  <div class="icon-btn" id="btn-next" title="次へ">➡</div>
+</div>
+
+<div class="info-box">
+  <h2>パターン4について</h2>
+  <p>
+    立方体の頂点A（上・前左）・辺DHの中点・辺BFの中点を通る平面で切断しています。この3点は頂点Aから伸びる3本の辺（A-B、A-D、A-E）それぞれの反対側にある辺の中点にあたるため、切断面は4辺の長さがすべて等しい（約2.236）「ひし形」になります（2本の対角線の長さは異なる＝正方形ではありません）。刃のスライド方式など、その他の仕組みはパターン1〜3（cube_cutsurface_square1.html／rectangle1.html／regulartriangle1.html）と同じです。
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   立方体の寸法（前回よりひとまわり小さく）
+   ════════════════════════════════════════════════════════════ */
+const S = 1.0;              // 立方体の半辺
+const TOP_Y = 2 * S;
+const CENTER_Y = S;
+const PLANE_SIZE = 3.4;     // 切断平面（刃）の大きさ。ひし形の短い方の対角線幅（約2.83）より一回り大きく調整（刃の幅方向はこの短い対角線がカバーできればよく、パターン2・3と同じ値でOKと事前計算で確認済み）
+
+const container = document.getElementById('canvas-container');
+const canvas = document.getElementById('c');
+const W = () => container.clientWidth;
+const H = () => container.clientHeight;
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x0d1117);
+renderer.setSize(W(), H());
+renderer.localClippingEnabled = true; // 断面を「刃が通過した部分だけ」見せるために必要
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, W() / H(), 0.1, 100);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(3, 6, 4);
+scene.add(dirLight);
+const backLight = new THREE.DirectionalLight(0x8899bb, 0.3);
+backLight.position.set(-3, 2, -4);
+scene.add(backLight);
+
+/* ════════════════════════════════════════════════════════════
+   立方体の頂点・辺（汎用計算の入力データ）
+   ════════════════════════════════════════════════════════════ */
+const V = {
+  A: new THREE.Vector3(-S, TOP_Y,  S), // 上・前左
+  B: new THREE.Vector3( S, TOP_Y,  S), // 上・前右
+  C: new THREE.Vector3( S, TOP_Y, -S), // 上・後右
+  D: new THREE.Vector3(-S, TOP_Y, -S), // 上・後左
+  E: new THREE.Vector3(-S, 0,      S), // 下・前左
+  F: new THREE.Vector3( S, 0,      S), // 下・前右
+  G: new THREE.Vector3( S, 0,     -S), // 下・後右
+  H: new THREE.Vector3(-S, 0,     -S), // 下・後左
+};
+const CUBE_EDGES = [
+  [V.A,V.B],[V.B,V.C],[V.C,V.D],[V.D,V.A], // 上面
+  [V.E,V.F],[V.F,V.G],[V.G,V.H],[V.H,V.E], // 下面
+  [V.A,V.E],[V.B,V.F],[V.C,V.G],[V.D,V.H], // 垂直
+];
+const mid = (p, q) => new THREE.Vector3().addVectors(p, q).multiplyScalar(0.5);
+
+/* ════════════════════════════════════════════════════════════
+   今回の問題：この3点を通る平面で切断する（汎用計算への入力）
+   依頼者指定の3点＝依頼者向け参照画像ラベルで「頂点E・辺HDの中点・辺BFの中点」
+   　→ 引き継ぎメモの対応表で変換すると：
+   　　参照画像E（上・前左）→ コード内 V.A
+   　　参照画像H（上・後左）→ コード内 V.D、参照画像D（下・後左）→ コード内 V.H
+   　　　⇒ 辺HDの中点（依頼者） = mid(V.D, V.H)
+   　　参照画像B（下・前右）→ コード内 V.F、参照画像F（上・前右）→ コード内 V.B
+   　　　⇒ 辺BFの中点（依頼者） = mid(V.B, V.F)
+   ※【重要・設計メモ】依頼者からの当初の指定は「頂点E・辺HDの中点・辺FEの中点」
+   　だったが、事前のNode.jsでの数値検証で、頂点Eと辺FEの中点が同じ辺（辺EF）上に
+   　乗ってしまうため、切断平面が辺EFを丸ごと含む形になり、4辺の長さが2種類
+   　（2.0と2.236）の「平行四辺形」になってしまうことが判明。依頼者に確認の上、
+   　3点目を「辺FEの中点」から「辺BFの中点」に変更し、4辺すべての長さが等しい
+   　（約2.236）真の「ひし形」（対角線は3.464と2.828で異なる＝正方形ではない）に
+   　なることを数値検証で確認済み。
+   ════════════════════════════════════════════════════════════ */
+const TARGET_POINTS = [ V.A, mid(V.D, V.H), mid(V.B, V.F) ];
+
+/* ════════════════════════════════════════════════════════════
+   ★汎用処理：3点 → 平面 → 立方体との交点（多角形）を自動計算
+   今後「頂点を通る三角形カット」等もこの関数がそのまま使える
+   ════════════════════════════════════════════════════════════ */
+function computeCutPlane(p1, p2, p3) {
+  const normal = new THREE.Vector3()
+    .crossVectors(new THREE.Vector3().subVectors(p2, p1), new THREE.Vector3().subVectors(p3, p1))
+    .normalize();
+  const point = new THREE.Vector3().addVectors(p1, p2).add(p3).divideScalar(3);
+  return { point, normal };
+}
+
+function planeBasis(normal) {
+  const ref = Math.abs(normal.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+  const u = new THREE.Vector3().crossVectors(ref, normal).normalize();
+  const v = new THREE.Vector3().crossVectors(normal, u).normalize();
+  return { u, v };
+}
+
+// 立方体（凸多面体）を平面で切ったときの断面（凸多角形）を求める
+function computeCrossSection(planePoint, normal, edges) {
+  const EPS = 1e-6;
+  const pts3d = [];
+  edges.forEach(([a, b]) => {
+    const da = new THREE.Vector3().subVectors(a, planePoint).dot(normal);
+    const db = new THREE.Vector3().subVectors(b, planePoint).dot(normal);
+    if (Math.abs(da) < EPS && Math.abs(db) < EPS) return; // 辺が平面上（今回は考慮しない）
+    if ((da > EPS && db > EPS) || (da < -EPS && db < -EPS)) return; // 交差なし
+    let t;
+    if (Math.abs(da) < EPS) t = 0;
+    else if (Math.abs(db) < EPS) t = 1;
+    else t = da / (da - db);
+    const p = new THREE.Vector3().lerpVectors(a, b, t);
+    // 重複点の除去
+    if (!pts3d.some(q => q.distanceTo(p) < 1e-4)) pts3d.push(p);
+  });
+
+  if (pts3d.length < 3) return { points3d: [], pointsUV: [] };
+
+  const { u, v } = planeBasis(normal);
+  const centroid = new THREE.Vector3();
+  pts3d.forEach(p => centroid.add(p));
+  centroid.divideScalar(pts3d.length);
+
+  const withAngle = pts3d.map(p => {
+    const d = new THREE.Vector3().subVectors(p, centroid);
+    const uv = { x: d.dot(u), y: d.dot(v) };
+    return { p, uv, ang: Math.atan2(uv.y, uv.x) };
+  });
+  withAngle.sort((a, b) => a.ang - b.ang);
+
+  return {
+    points3d: withAngle.map(o => o.p),
+    pointsUV: withAngle.map(o => o.uv),
+    basis: { u, v, centroid },
+  };
+}
+
+const cutPlane = computeCutPlane(TARGET_POINTS[0], TARGET_POINTS[1], TARGET_POINTS[2]);
+const crossSection = computeCrossSection(cutPlane.point, cutPlane.normal, CUBE_EDGES);
+
+// ★重要：刃や進入/通過の基準点には、TARGET_POINTS3点だけの重心（cutPlane.point）ではなく、
+// 断面ポリゴン全体（3点では表現しきれない4点目以降の交点も含む）の重心を使う。
+// そうしないと、TARGET_POINTSが断面の全頂点をちょうど3個しか含まない場合
+// （今回のように4頂点の断面で3点しか指定していない場合など）に、
+// 刃の中心が本来の断面中心からずれ、左右で見た目のはみ出し幅が非対称になってしまう。
+const refPoint = (crossSection.basis && crossSection.basis.centroid) ? crossSection.basis.centroid : cutPlane.point;
+
+/* ════════════════════════════════════════════════════════════
+   ★汎用処理：切断平面を「正しい向き・正しい位置」に固定したまま、
+   その面の中を上から下へスライドする帯（刃）が断面を少しずつ
+   明らかにしていく方式（cutsurface_sample1と同じ考え方）。
+   平面を立方体の外から法線方向に近づける方式だと、法線が
+   立方体のどれかの面と平行な場合に「面が迫ってくるだけ」に見えて
+   しまうため、この方式に変更した。
+   upDir：切断平面に沿った方向のうち、見た目上「上向き」に近い方向。
+   ════════════════════════════════════════════════════════════ */
+const { u: planeU, v: planeV } = planeBasis(cutPlane.normal);
+const upDir = (Math.abs(planeU.y) >= Math.abs(planeV.y) ? planeU.clone() : planeV.clone());
+if (upDir.y < 0) upDir.negate();
+
+// ★重要（今回・7/14に発見した汎用処理のバグ修正）：
+// CONTACT_H/FAR_H（刃の先端が立方体に接触する高さ）は、以前は「立方体の全8頂点」を
+// 対象にupDir方向への投影の最大・最小を取っていたが、これだと切断平面上に無い頂点
+// （今回のパターン3で言えば、断面に無関係な頂点D）がたまたま最大値になってしまう
+// ケースがあり、刃が実際の断面（対角線EG＝A-C）よりずっと手前で止まってしまう
+// （立方体から浮いて見える）不具合につながっていた。
+// 刃は常に「切断平面と同一平面上」をスライドするだけなので、接触判定も
+// 「断面ポリゴンの頂点（crossSection.points3d）」だけを基準にするのが正しい。
+let CONTACT_H = -Infinity, FAR_H = Infinity;
+crossSection.points3d.forEach(p => {
+  const s = upDir.dot(new THREE.Vector3().subVectors(p, refPoint));
+  if (s > CONTACT_H) CONTACT_H = s;
+  if (s < FAR_H) FAR_H = s;
+});
+const ENTRY_MARGIN = 1.0;
+const CLEAR_MARGIN = 0.2;
+// ここで言う「H」は刃の中心ではなく、刃の先端（進行方向側の辺）の高さを表す。
+// こうすることで「刃の下辺がちょうど立方体の上面に接した瞬間」に正しく停止できる。
+const SWEEP_START_H = CONTACT_H + ENTRY_MARGIN; // 進入開始位置（先端が立方体の外側）
+// 刃には大きさ(PLANE_SIZE)があるため、先端(下辺)だけでなく
+// 後端(上辺)も立方体を完全に通り抜けた位置まで進めないと「切り終わる前に消える」ことになる
+const SWEEP_END_H = FAR_H - PLANE_SIZE - CLEAR_MARGIN; // 上辺(後端)が完全に通過した位置
+
+// 断面の輪郭線・塗り・ハッチングを「刃が到達した部分だけ」見せる共有クリップ平面
+const revealPlane = new THREE.Plane(upDir.clone(), -upDir.dot(refPoint) - SWEEP_START_H);
+
+/* ════════════════════════════════════════════════════════════
+   立方体本体（半透明）＋稜線
+   ════════════════════════════════════════════════════════════ */
+const cubeGeo = new THREE.BoxGeometry(2 * S, 2 * S, 2 * S);
+const cubeMat = new THREE.MeshPhongMaterial({
+  color: 0x7a5ec8, transparent: true, opacity: 0.42,
+  side: THREE.DoubleSide, shininess: 50, depthWrite: false,
+});
+const cubeMesh = new THREE.Mesh(cubeGeo, cubeMat);
+cubeMesh.position.set(0, CENTER_Y, 0);
+cubeMesh.renderOrder = 0;
+scene.add(cubeMesh);
+
+// 辺は LineBasicMaterial だと太さ指定が効かない環境があるため、
+// チューブ（円柱）で描画して確実に太く見せる
+function buildStraightTubeEarly(a, b, radius, color, opacity) {
+  const curve = new THREE.LineCurve3(a, b);
+  const geo = new THREE.TubeGeometry(curve, 2, radius, 8, false);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+  return new THREE.Mesh(geo, mat);
+}
+const cubeEdgesGroup = new THREE.Group();
+CUBE_EDGES.forEach(([a, b]) => {
+  cubeEdgesGroup.add(buildStraightTubeEarly(a, b, 0.022, 0xc9b8ea, 0.9));
+});
+cubeEdgesGroup.renderOrder = 0.6;
+scene.add(cubeEdgesGroup);
+
+/* 赤丸（3点） */
+const markerGeo = new THREE.SphereGeometry(0.06, 20, 20);
+const markerMat = new THREE.MeshBasicMaterial({ color: 0xe8503c });
+const markers = TARGET_POINTS.map(p => {
+  const m = new THREE.Mesh(markerGeo, markerMat);
+  m.position.copy(p);
+  m.renderOrder = 4;
+  scene.add(m);
+  return m;
+});
+
+/* ════════════════════════════════════════════════════════════
+   断面の輪郭線（外周）：先に細い線でヒントとして見せる
+   ════════════════════════════════════════════════════════════ */
+function buildStraightTube(a, b, radius, color, opacity, clip) {
+  const curve = new THREE.LineCurve3(a, b);
+  const geo = new THREE.TubeGeometry(curve, 2, radius, 8, false);
+  const matOpts = { color, transparent: true, opacity, depthWrite: false };
+  if (clip) matOpts.clippingPlanes = [clip];
+  const mat = new THREE.MeshBasicMaterial(matOpts);
+  return new THREE.Mesh(geo, mat);
+}
+function buildPolygonOutline(points3d, radius, color, opacity, clip) {
+  const group = new THREE.Group();
+  const n = points3d.length;
+  for (let i = 0; i < n; i++) {
+    group.add(buildStraightTube(points3d[i], points3d[(i + 1) % n], radius, color, opacity, clip));
+  }
+  group.renderOrder = 3.5;
+  return group;
+}
+// 輪郭線の不透明度は最初から固定値にしておき、revealPlane（刃の通過位置）だけで
+// 「どこまで見えているか」を制御する（cutsurface_sample1と同じ考え方）
+const outlineGroup = buildPolygonOutline(crossSection.points3d, 0.011, 0xffa733, 0.95, revealPlane);
+scene.add(outlineGroup);
+
+/* ════════════════════════════════════════════════════════════
+   断面の塗り（正解後に表示）：三角形ファンで多角形を生成
+   ════════════════════════════════════════════════════════════ */
+function buildFillMesh(points3d, color, opacity, clip) {
+  const centroid = new THREE.Vector3();
+  points3d.forEach(p => centroid.add(p));
+  centroid.divideScalar(points3d.length);
+  const positions = [];
+  const n = points3d.length;
+  for (let i = 0; i < n; i++) {
+    const a = points3d[i], b = points3d[(i + 1) % n];
+    positions.push(centroid.x, centroid.y, centroid.z, a.x, a.y, a.z, b.x, b.y, b.z);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.computeVertexNormals();
+  const matOpts = { color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false };
+  if (clip) matOpts.clippingPlanes = [clip];
+  const mat = new THREE.MeshBasicMaterial(matOpts);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = 1;
+  return mesh;
+}
+// 塗りの不透明度も固定値にし、revealPlaneだけで見える範囲を制御する
+const fillMesh = buildFillMesh(crossSection.points3d, 0xdd3333, 0.30, revealPlane);
+scene.add(fillMesh);
+
+/* ★汎用処理：ハッチング線を「断面の形」に沿って1本ずつ計算する
+   （テクスチャの繰り返しではないため、9分割のような継ぎ目バグが起きない） */
+function intersectDiagLineWithSegment(k, p1, p2) {
+  const f1 = p1.x - p1.y - k;
+  const f2 = p2.x - p2.y - k;
+  if ((f1 > 0 && f2 > 0) || (f1 < 0 && f2 < 0)) return null;
+  if (Math.abs(f1 - f2) < 1e-9) return null;
+  const t = f1 / (f1 - f2);
+  return { x: p1.x + (p2.x - p1.x) * t, y: p1.y + (p2.y - p1.y) * t };
+}
+function buildHatchLines(pointsUV, basis, planePoint, spacing, radius, color, clip) {
+  const group = new THREE.Group();
+  const n = pointsUV.length;
+  if (n < 3) return group;
+  let kMin = Infinity, kMax = -Infinity;
+  pointsUV.forEach(p => {
+    const k = p.x - p.y;
+    kMin = Math.min(kMin, k);
+    kMax = Math.max(kMax, k);
+  });
+  for (let k = kMin + spacing * 0.5; k < kMax; k += spacing) {
+    const hits = [];
+    for (let i = 0; i < n; i++) {
+      const hit = intersectDiagLineWithSegment(k, pointsUV[i], pointsUV[(i + 1) % n]);
+      if (hit && !hits.some(h => Math.hypot(h.x - hit.x, h.y - hit.y) < 1e-5)) hits.push(hit);
+    }
+    if (hits.length >= 2) {
+      const uvToWorld = (uv) => new THREE.Vector3()
+        .copy(planePoint)
+        .addScaledVector(basis.u, uv.x)
+        .addScaledVector(basis.v, uv.y);
+      const a = uvToWorld(hits[0]);
+      const b = uvToWorld(hits[1]);
+      group.add(buildStraightTube(a, b, radius, color, 1, clip));
+    }
+  }
+  return group;
+}
+// ハッチングも同様にrevealPlaneで見える範囲を制御するため、常時visible=trueにしておく
+const hatchGroup = buildHatchLines(
+  crossSection.pointsUV, crossSection.basis, crossSection.basis.centroid, 0.14, 0.006, 0xff8a8a, revealPlane
+);
+hatchGroup.renderOrder = 1.2;
+scene.add(hatchGroup);
+
+/* ════════════════════════════════════════════════════════════
+   動く切断平面（緑・刃）。3点で決まる平面と「同じ向き・同じ位置」に
+   固定したまま、その面の中を上（SWEEP_START_H）から下（SWEEP_END_H）へ
+   スライドさせることで「刃が立方体を通過していく」ように見せる。
+   ════════════════════════════════════════════════════════════ */
+const cutPlaneGeo = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE);
+const cutPlaneMat = new THREE.MeshPhongMaterial({
+  color: 0x44cc88, side: THREE.DoubleSide, transparent: true, opacity: 0.55, depthWrite: false,
+});
+const cutPlaneMesh = new THREE.Mesh(cutPlaneGeo, cutPlaneMat);
+cutPlaneMesh.renderOrder = 2;
+{
+  // ★重要（今回・7/14に発見した汎用処理のバグ修正）：
+  // 以前はsetFromUnitVectors(Z軸→法線)だけで刃の向きを決めていたため、
+  // 法線方向は合っていても「面の中でどちらを向くか（回転の捻れ）」までは
+  // 揃っておらず、刃の上下の辺がupDir（進行方向）に対して斜めになってしまう
+  // ことがあった（パターン3で、刃の下辺が対角線EGと平行にならない不具合）。
+  // ここではPlaneGeometryのローカルX軸をperpDir、ローカルY軸をupDirに
+  // 明示的に合わせることで、刃の上下の辺が必ずupDirに垂直（＝perpDirと平行）に
+  // なるようにする。
+  // ※【重要・再修正】perpDirをnormal×upDirの順で計算すると、(X,Y,Z)＝
+  // (perpDir, upDir, normal)が「鏡写し」の左手系（行列式が-1）になってしまい、
+  // クォータニオン変換が正しく機能せず、刃が断面とまったく違う向きになる
+  // 不具合が発生した。upDir×normalの順に直し、右手系（行列式+1）になる
+  // ようにして解決した。
+  const perpDir = new THREE.Vector3().crossVectors(upDir, cutPlane.normal).normalize();
+  const basisMat = new THREE.Matrix4().makeBasis(perpDir, upDir, cutPlane.normal);
+  cutPlaneMesh.quaternion.setFromRotationMatrix(basisMat);
+}
+// 平面の縁を光らせて「刃」のように見せる（前回より細めに戻した）
+{
+  const h = PLANE_SIZE / 2;
+  const corners = [
+    new THREE.Vector3(-h, -h, 0), new THREE.Vector3(h, -h, 0),
+    new THREE.Vector3(h, h, 0), new THREE.Vector3(-h, h, 0),
+  ];
+  for (let i = 0; i < 4; i++) {
+    const curve = new THREE.LineCurve3(corners[i], corners[(i + 1) % 4]);
+    const geo = new THREE.TubeGeometry(curve, 2, 0.007, 8, false);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x9dffcb, transparent: true, opacity: 0.85, depthWrite: false });
+    cutPlaneMesh.add(new THREE.Mesh(geo, mat));
+  }
+}
+scene.add(cutPlaneMesh);
+
+// hは「刃の中心」ではなく「刃の先端（進行方向側の辺）」の高さとして扱う。
+// メッシュの中心は先端よりPLANE_SIZE/2だけ後ろ（＝上方向）にずらして配置する。
+function setSweepHeight(h) {
+  cutPlaneMesh.position.copy(refPoint).addScaledVector(upDir, h + PLANE_SIZE / 2);
+  revealPlane.constant = -upDir.dot(refPoint) - h;
+}
+
+/* ─── グリッド ─── */
+const grid = new THREE.GridHelper(8, 16, 0x223344, 0x1a2a36);
+scene.add(grid);
+
+/* ════════════════════════════════════════════════════════════
+   カメラ
+   ════════════════════════════════════════════════════════════ */
+const CAMERA_DISTANCE = 6.4;
+function azElToPos(azDeg, elDeg) {
+  const az = azDeg * Math.PI / 180, el = elDeg * Math.PI / 180;
+  const rH = CAMERA_DISTANCE * Math.cos(el);
+  return { x: rH * Math.cos(az), y: CENTER_Y + CAMERA_DISTANCE * Math.sin(el), z: rH * Math.sin(az) };
+}
+function setCameraByAzEl(azDeg, elDeg) {
+  const p = azElToPos(azDeg, elDeg);
+  camera.position.set(p.x, p.y, p.z);
+  camera.lookAt(0, CENTER_Y, 0);
+}
+// az（方位角）：水平面（xz平面）内で、x軸を0度としてz軸方向へ回転させた角度
+// el（仰角）：水平面から真上に向かって見上げる角度（90度で真上から見下ろす形）
+const CAMERA_AZ_START = 25, CAMERA_EL_START = 30;
+
+// viewNormalの符号：断面を正面から見るカメラが、開始位置と同じ側から見るように調整
+let viewNormal = cutPlane.normal.clone();
+{
+  const camStart = new THREE.Vector3(...Object.values(azElToPos(CAMERA_AZ_START, CAMERA_EL_START)));
+  const towardCam = new THREE.Vector3().subVectors(camStart, cutPlane.point).normalize();
+  if (viewNormal.dot(towardCam) < 0) viewNormal.negate();
+}
+
+// 断面を正面から見る角度（法線方向をそのままカメラの向きに変換）
+const finalDir = viewNormal.clone();
+const CAMERA_AZ_END = Math.atan2(finalDir.z, finalDir.x) * 180 / Math.PI;
+const CAMERA_EL_END = Math.asin(THREE.MathUtils.clamp(finalDir.y, -1, 1)) * 180 / Math.PI;
+const CAMERA_AZ_END_LONGWAY = CAMERA_AZ_START - 360 + (CAMERA_AZ_END - ((CAMERA_AZ_START % 360 + 360) % 360));
+
+setCameraByAzEl(CAMERA_AZ_START, CAMERA_EL_START);
+
+/* ════════════════════════════════════════════════════════════
+   フェーズ管理（0:待機 1:進入 1.5:解答待ち 2:通過（断面が徐々に現れる）
+                3:カメラ回り込み 4:静止）
+   ════════════════════════════════════════════════════════════ */
+let phase = 0;
+let phaseStartTime = 0;
+
+const PLANE_APPROACH_DURATION = 1800;
+const PASS_THROUGH_DURATION = 2400;
+const FADE_OUT_DURATION = 400;
+const CAMERA_ORBIT_DURATION = 7500; // 7/14: 切断後の回転が速すぎるとのフィードバックを受け、5000→7500に変更
+const HOLD_DURATION = 2000;
+
+function easeInOutCubic(t) { return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2; }
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+const qMarkEl = document.getElementById('question-mark');
+
+function resetScene() {
+  cutPlaneMesh.visible = true;
+  cutPlaneMesh.material.opacity = 0.55;
+  setSweepHeight(SWEEP_START_H);
+  markers.forEach(m => m.visible = true);
+  qMarkEl.classList.remove('show');
+  setCameraByAzEl(CAMERA_AZ_START, CAMERA_EL_START);
+  document.getElementById('end-controls').style.display = 'none';
+  resetChoices();
+}
+
+function startPuzzle() {
+  resetScene();
+  phase = 1;
+  phaseStartTime = performance.now();
+}
+
+function beginRevealAfterCorrectAnswer() {
+  markers.forEach(m => m.visible = false);
+  qMarkEl.classList.remove('show');
+  phase = 2;
+  phaseStartTime = performance.now();
+}
+
+function animate(time) {
+  requestAnimationFrame(animate);
+
+  if (phase === 1) {
+    const t = easeInOutCubic(clamp01((time - phaseStartTime) / PLANE_APPROACH_DURATION));
+    setSweepHeight(SWEEP_START_H + (CONTACT_H - SWEEP_START_H) * t);
+    if (t >= 1) {
+      qMarkEl.classList.add('show');
+      phase = 1.5;
+    }
+  } else if (phase === 2) {
+    // ここでは刃をまだフェードさせない。上辺(後端)が完全に立方体を通り抜けるまで進める。
+    const t = clamp01((time - phaseStartTime) / PASS_THROUGH_DURATION);
+    setSweepHeight(CONTACT_H + (SWEEP_END_H - CONTACT_H) * t);
+    if (t >= 1) {
+      phase = 2.5;
+      phaseStartTime = time;
+    }
+  } else if (phase === 2.5) {
+    // 完全に通過し終わってからフェードアウト
+    const t = clamp01((time - phaseStartTime) / FADE_OUT_DURATION);
+    cutPlaneMesh.material.opacity = 0.55 * (1 - t);
+    if (t >= 1) {
+      cutPlaneMesh.visible = false;
+      phase = 3;
+      phaseStartTime = time;
+    }
+  } else if (phase === 3) {
+    const t = easeInOutCubic(clamp01((time - phaseStartTime) / CAMERA_ORBIT_DURATION));
+    const az = CAMERA_AZ_START + (CAMERA_AZ_END_LONGWAY - CAMERA_AZ_START) * t;
+    const el = CAMERA_EL_START + (CAMERA_EL_END - CAMERA_EL_START) * t;
+    setCameraByAzEl(az, el);
+    if (t >= 1) { phase = 4; phaseStartTime = time; }
+  } else if (phase === 4) {
+    setCameraByAzEl(CAMERA_AZ_END, CAMERA_EL_END);
+    if (time - phaseStartTime >= HOLD_DURATION) {
+      phase = 0;
+      document.getElementById('end-controls').style.display = 'flex';
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+animate(0);
+
+window.addEventListener('resize', () => {
+  renderer.setSize(W(), H());
+  camera.aspect = W() / H();
+  camera.updateProjectionMatrix();
+});
+
+/* ════════════════════════════════════════════════════════════
+   選択肢（1〜5）
+   ════════════════════════════════════════════════════════════ */
+const CORRECT_INDEX = 4; // 正解＝4番（ひし形）。ダミー図形は五角形／正三角形／縦長長方形／六角形。
+const SHAPE_SVGS = {
+  1: `<svg viewBox="0 0 120 100"><polygon points="60,8 98,36 84,86 36,86 22,36" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  2: `<svg viewBox="0 0 120 100"><polygon points="60,13 100,82 20,82" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  3: `<svg viewBox="0 0 120 100"><polygon points="42,15 78,15 78,85 42,85" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  4: `<svg viewBox="0 0 120 100"><polygon points="60,5 97,50 60,95 23,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  5: `<svg viewBox="0 0 120 100"><polygon points="40,10 80,10 100,50 80,90 40,90 20,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+};
+
+const choicesContainer = document.getElementById('choices');
+function buildChoices() {
+  choicesContainer.innerHTML = '';
+  for (let i = 1; i <= 5; i++) {
+    const card = document.createElement('div');
+    card.className = 'choice-card';
+    card.dataset.idx = i;
+    card.innerHTML = SHAPE_SVGS[i] + `<div class="choice-num">${i}</div><div class="result-mark"></div>`;
+    card.addEventListener('click', () => onChoiceClick(i, card));
+    choicesContainer.appendChild(card);
+  }
+}
+buildChoices();
+
+function resetChoices() {
+  [...choicesContainer.children].forEach(card => {
+    card.classList.remove('disabled', 'shake', 'correct-flash');
+    const mark = card.querySelector('.result-mark');
+    mark.className = 'result-mark';
+    mark.textContent = '';
+  });
+}
+
+function onChoiceClick(idx, card) {
+  if (phase !== 1.5) return;
+  const mark = card.querySelector('.result-mark');
+  if (idx === CORRECT_INDEX) {
+    mark.textContent = '〇';
+    mark.className = 'result-mark correct show';
+    card.classList.add('correct-flash');
+    [...choicesContainer.children].forEach(c => c.classList.add('disabled'));
+    setTimeout(beginRevealAfterCorrectAnswer, 550);
+  } else {
+    mark.textContent = '✕';
+    mark.className = 'result-mark wrong show';
+    card.classList.add('shake');
+    setTimeout(() => {
+      card.classList.remove('shake');
+      mark.className = 'result-mark';
+      mark.textContent = '';
+    }, 500);
+  }
+}
+
+document.getElementById('btn-replay').addEventListener('click', startPuzzle);
+document.getElementById('btn-next').addEventListener('click', (e) => {
+  e.currentTarget.classList.add('wiggle');
+  setTimeout(() => e.currentTarget.classList.remove('wiggle'), 400);
+});
+
+startPuzzle();
+</script>
+</body>
+</html>
