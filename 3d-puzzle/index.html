@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,40 +21,10 @@
     text-align: center;
     margin-bottom: 30px;
   }
-  .hero .badge {
-    display: inline-block;
-    font-size: 12px;
-    letter-spacing: 0.08em;
-    color: #7ab0d8;
-    background: #141d2b;
-    border: 1px solid #2a3a52;
-    padding: 4px 14px;
-    border-radius: 20px;
-    margin-bottom: 14px;
-  }
   .hero h1 {
     font-size: 24px;
     font-weight: 600;
     color: #a8c8e8;
-    margin-bottom: 10px;
-    line-height: 1.5;
-  }
-  .hero p {
-    font-size: 13.5px;
-    color: #8aa0b8;
-    line-height: 1.8;
-    max-width: 480px;
-    margin: 0 auto;
-  }
-
-  .list-title {
-    width: min(700px, 100%);
-    font-size: 14px;
-    color: #7ab0d8;
-    font-weight: 500;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #2a3a52;
   }
 
   .puzzle-list {
@@ -94,112 +64,34 @@
     font-size: 22px;
   }
 
-  .puzzle-body { flex: 1; min-width: 0; }
-  .puzzle-no {
-    font-size: 11.5px;
-    color: #7a8fa6;
-    margin-bottom: 3px;
-  }
   .puzzle-name {
+    flex: 1;
     font-size: 15px;
     color: #d0e0f0;
     font-weight: 500;
-    margin-bottom: 4px;
-  }
-  .puzzle-desc {
-    font-size: 12.5px;
-    color: #8aa0b8;
-    line-height: 1.5;
   }
   .puzzle-arrow {
     font-size: 18px;
     color: #5a7090;
     flex-shrink: 0;
   }
-
-  .puzzle-card.disabled {
-    opacity: 0.45;
-    pointer-events: none;
-  }
-  .coming-soon-tag {
-    font-size: 10.5px;
-    color: #6a8098;
-    border: 1px solid #3a4a60;
-    border-radius: 10px;
-    padding: 2px 8px;
-    margin-left: 6px;
-  }
-
-  footer {
-    margin-top: 40px;
-    font-size: 11.5px;
-    color: #5a6a80;
-    text-align: center;
-  }
-  footer a {
-    color: #7ab0d8;
-    text-decoration: none;
-  }
-  footer a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
 
 <div class="hero">
-  <div class="badge">3D PUZZLE PROJECT</div>
   <h1>3D puzzle</h1>
-  <p>立体を実際に動かしながら遊べる、3Dアニメーションパズル集です。切断・展開・回転など、頭の中だけでは完結しにくい操作を、その場で確認しながら考えられます。</p>
 </div>
-
-<div class="list-title">シリーズ一覧</div>
 
 <div class="puzzle-list">
 
   <a class="puzzle-card" href="./cutting/">
     <div class="puzzle-thumb">🔪</div>
-    <div class="puzzle-body">
-      <div class="puzzle-no">シリーズ1</div>
-      <div class="puzzle-name">切断アニメーションパズル</div>
-      <div class="puzzle-desc">立体を平面で切ったとき、切り口がどんな形になるかを考えるパズル</div>
-    </div>
+    <div class="puzzle-name">Cutting animation</div>
     <div class="puzzle-arrow">›</div>
   </a>
 
-  <div class="puzzle-card disabled">
-    <div class="puzzle-thumb">📐</div>
-    <div class="puzzle-body">
-      <div class="puzzle-no">シリーズ2<span class="coming-soon-tag">準備中</span></div>
-      <div class="puzzle-name">展開図</div>
-      <div class="puzzle-desc">立体の展開図を組み立てるパズル（今後追加予定）</div>
-    </div>
-    <div class="puzzle-arrow">›</div>
-  </div>
-
-  <div class="puzzle-card disabled">
-    <div class="puzzle-thumb">🔄</div>
-    <div class="puzzle-body">
-      <div class="puzzle-no">シリーズ3<span class="coming-soon-tag">準備中</span></div>
-      <div class="puzzle-name">図形の回転・軌跡</div>
-      <div class="puzzle-desc">図形を回転させたときの軌跡を考えるパズル（今後追加予定）</div>
-    </div>
-    <div class="puzzle-arrow">›</div>
-  </div>
-
-  <div class="puzzle-card disabled">
-    <div class="puzzle-thumb">🧩</div>
-    <div class="puzzle-body">
-      <div class="puzzle-no">シリーズ4<span class="coming-soon-tag">準備中</span></div>
-      <div class="puzzle-name">図形の組み合わせ</div>
-      <div class="puzzle-desc">複数の図形を組み合わせるパズル（今後追加予定）</div>
-    </div>
-    <div class="puzzle-arrow">›</div>
-  </div>
-
 </div>
-
-<footer>
-  © 3D puzzle Project　|　<a href="../index.html">空間把握 3Dパズル解説（旧サイト）はこちら</a>
-</footer>
 
 </body>
 </html>
