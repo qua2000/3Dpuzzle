@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>立方体の切断面パズル（パターン4）</title>
+<title>Puzzle 4 | 3D puzzle</title>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -152,9 +152,6 @@
 </head>
 <body>
 
-<h1>立方体の切断面パズル（パターン4）</h1>
-<p class="subtitle">頂点A（上・前左）・辺DHの中点（上後左と下後左を結ぶ辺の中点）・辺BFの中点（上前右と下前右を結ぶ辺の中点）を通る平面で切断（ひし形カット）</p>
-
 <div id="canvas-container">
   <canvas id="c"></canvas>
   <div id="question-mark">？</div>
@@ -163,15 +160,8 @@
 <div id="choices"></div>
 
 <div id="end-controls">
-  <div class="icon-btn" id="btn-replay" title="リプレイ">▶</div>
-  <div class="icon-btn" id="btn-next" title="次へ">➡</div>
-</div>
-
-<div class="info-box">
-  <h2>パターン4について</h2>
-  <p>
-    立方体の頂点A（上・前左）・辺DHの中点・辺BFの中点を通る平面で切断しています。この3点は頂点Aから伸びる3本の辺（A-B、A-D、A-E）それぞれの反対側にある辺の中点にあたるため、切断面は4辺の長さがすべて等しい（約2.236）「ひし形」になります（2本の対角線の長さは異なる＝正方形ではありません）。刃のスライド方式など、その他の仕組みはパターン1〜3（cube_cutsurface_square1.html／rectangle1.html／regulartriangle1.html）と同じです。
-  </p>
+  <div class="icon-btn" id="btn-replay" title="Replay">▶</div>
+  <div class="icon-btn" id="btn-next" title="Next">➡</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>

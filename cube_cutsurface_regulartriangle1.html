@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>立方体の切断面パズル（パターン3）</title>
+<title>Puzzle 3 | 3D puzzle</title>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -152,9 +152,6 @@
 </head>
 <body>
 
-<h1>立方体の切断面パズル（パターン3）</h1>
-<p class="subtitle">頂点A（上・前左）・C（上・後右）・F（下・前右）を通る平面で切断（正三角形カット）</p>
-
 <div id="canvas-container">
   <canvas id="c"></canvas>
   <div id="question-mark">？</div>
@@ -163,15 +160,8 @@
 <div id="choices"></div>
 
 <div id="end-controls">
-  <div class="icon-btn" id="btn-replay" title="リプレイ">▶</div>
-  <div class="icon-btn" id="btn-next" title="次へ">➡</div>
-</div>
-
-<div class="info-box">
-  <h2>パターン3について</h2>
-  <p>
-    立方体の頂点A（上・前左）・C（上・後右）・F（下・前右）を通る平面で切断しています。この3点は頂点B（上・前右）から伸びる3本の辺（B-A、B-C、B-F）の反対側の端にあたるため、この平面は頂点Bの角をちょうど切り落とす形になり、切断面は3辺の長さが等しい「正三角形」になります。刃のスライド方式など、その他の仕組みはパターン1（cube_cutsurface_square1.html）・パターン2（cube_cutsurface_rectangle1.html）と同じです。
-  </p>
+  <div class="icon-btn" id="btn-replay" title="Replay">▶</div>
+  <div class="icon-btn" id="btn-next" title="Next">➡</div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
