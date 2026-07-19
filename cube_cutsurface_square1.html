@@ -676,9 +676,8 @@ function onChoiceClick(idx, card) {
 }
 
 document.getElementById('btn-replay').addEventListener('click', startPuzzle);
-document.getElementById('btn-next').addEventListener('click', (e) => {
-  e.currentTarget.classList.add('wiggle');
-  setTimeout(() => e.currentTarget.classList.remove('wiggle'), 400);
+document.getElementById('btn-next').addEventListener('click', () => {
+  window.location.href = 'cube_cutsurface_rectangle1.html';
 });
 
 startPuzzle();
