@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Puzzle 4 | 3D puzzle</title>
+<title>Puzzle 5 | 3D puzzle</title>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -173,7 +173,7 @@
 const S = 1.0;              // 立方体の半辺
 const TOP_Y = 2 * S;
 const CENTER_Y = S;
-const PLANE_SIZE = 3.4;     // 切断平面（刃）の大きさ。ひし形の短い方の対角線幅（約2.83）より一回り大きく調整（刃の幅方向はこの短い対角線がカバーできればよく、パターン2・3と同じ値でOKと事前計算で確認済み）
+const PLANE_SIZE = 3.4;     // 切断平面（刃）の大きさ。断面の刃の進行方向に垂直な幅（約2.83）・高さ（約2.12）より一回り大きく調整（事前のNode.js検証で3.4あれば十分カバーできることを確認済み）
 
 const container = document.getElementById('canvas-container');
 const canvas = document.getElementById('c');
@@ -219,22 +219,21 @@ const mid = (p, q) => new THREE.Vector3().addVectors(p, q).multiplyScalar(0.5);
 
 /* ════════════════════════════════════════════════════════════
    今回の問題：この3点を通る平面で切断する（汎用計算への入力）
-   依頼者指定の3点＝依頼者向け参照画像ラベルで「頂点E・辺HDの中点・辺BFの中点」
-   　→ 引き継ぎメモの対応表で変換すると：
-   　　参照画像E（上・前左）→ コード内 V.A
-   　　参照画像H（上・後左）→ コード内 V.D、参照画像D（下・後左）→ コード内 V.H
-   　　　⇒ 辺HDの中点（依頼者） = mid(V.D, V.H)
-   　　参照画像B（下・前右）→ コード内 V.F、参照画像F（上・前右）→ コード内 V.B
-   　　　⇒ 辺BFの中点（依頼者） = mid(V.B, V.F)
-   ※【重要・設計メモ】依頼者からの当初の指定は「頂点E・辺HDの中点・辺FEの中点」
-   　だったが、事前のNode.jsでの数値検証で、頂点Eと辺FEの中点が同じ辺（辺EF）上に
-   　乗ってしまうため、切断平面が辺EFを丸ごと含む形になり、4辺の長さが2種類
-   　（2.0と2.236）の「平行四辺形」になってしまうことが判明。依頼者に確認の上、
-   　3点目を「辺FEの中点」から「辺BFの中点」に変更し、4辺すべての長さが等しい
-   　（約2.236）真の「ひし形」（対角線は3.464と2.828で異なる＝正方形ではない）に
-   　なることを数値検証で確認済み。
+   依頼者指定の3点＝依頼者向け参照画像ラベルで「辺EHの中点・辺GHの中点・頂点A」。
+   引き継ぎメモの対応表は「同じ文字＝同じ点」ではなく、上下が入れ替わる文字の
+   組み合わせ（A↔E、B↔F、C↔G、D↔H）である点に注意。正しく変換すると：
+   　依頼者E（上・前左）→ コード内 V.A　　依頼者H（上・後左）→ コード内 V.D
+   　依頼者G（上・後右）→ コード内 V.C　　依頼者A（下・前左）→ コード内 V.E
+   　⇒ 辺EHの中点（依頼者） = mid(V.A, V.D)
+   　⇒ 辺GHの中点（依頼者） = mid(V.C, V.D)
+   　⇒ 頂点A（依頼者）     = V.E
+   ※【設計メモ】実装前にNode.jsで断面の4頂点・辺の長さ・対角線を数値検証済み。
+   　辺の長さは 2.236 / 1.414 / 2.236 / 2.828 の順で、1.414と2.828の2辺が平行
+   　（長さの比2:1）、残り2辺（脚）は2.236で等しく、対角線も3.000で等しいことを
+   　確認済み。これにより「等脚台形」（平行四辺形にはならない）になることを
+   　確認できた。
    ════════════════════════════════════════════════════════════ */
-const TARGET_POINTS = [ V.A, mid(V.D, V.H), mid(V.B, V.F) ];
+const TARGET_POINTS = [ mid(V.A, V.D), mid(V.C, V.D), V.E ];
 
 /* ════════════════════════════════════════════════════════════
    ★汎用処理：3点 → 平面 → 立方体との交点（多角形）を自動計算
@@ -665,13 +664,13 @@ window.addEventListener('resize', () => {
 /* ════════════════════════════════════════════════════════════
    選択肢（1〜5）
    ════════════════════════════════════════════════════════════ */
-const CORRECT_INDEX = 4; // 正解＝4番（ひし形）。ダミー図形は五角形／正三角形／縦長長方形／六角形。
+const CORRECT_INDEX = 4; // 正解＝4番（等脚台形）。ダミー図形は五角形／正三角形／六角形／ひし形。
 const SHAPE_SVGS = {
   1: `<svg viewBox="0 0 120 100"><polygon points="60,8 98,36 84,86 36,86 22,36" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
   2: `<svg viewBox="0 0 120 100"><polygon points="60,13 100,82 20,82" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  3: `<svg viewBox="0 0 120 100"><polygon points="42,15 78,15 78,85 42,85" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  4: `<svg viewBox="0 0 120 100"><polygon points="60,5 97,50 60,95 23,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  5: `<svg viewBox="0 0 120 100"><polygon points="40,10 80,10 100,50 80,90 40,90 20,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  3: `<svg viewBox="0 0 120 100"><polygon points="40,10 80,10 100,50 80,90 40,90 20,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  4: `<svg viewBox="0 0 120 100"><polygon points="45,15 75,15 95,85 25,85" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  5: `<svg viewBox="0 0 120 100"><polygon points="60,5 97,50 60,95 23,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
 };
 
 const choicesContainer = document.getElementById('choices');
@@ -720,7 +719,7 @@ function onChoiceClick(idx, card) {
 
 document.getElementById('btn-replay').addEventListener('click', startPuzzle);
 document.getElementById('btn-next').addEventListener('click', () => {
-  window.location.href = 'cube_cutsurface_isosceles_trapezoid1.html';
+  window.location.href = 'cutsurface_sample1.html';
 });
 
 startPuzzle();
