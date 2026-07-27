@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Puzzle 5 | 3D puzzle</title>
+<title>Puzzle 6 | 3D puzzle</title>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -219,21 +219,22 @@ const mid = (p, q) => new THREE.Vector3().addVectors(p, q).multiplyScalar(0.5);
 
 /* ════════════════════════════════════════════════════════════
    今回の問題：この3点を通る平面で切断する（汎用計算への入力）
-   依頼者指定の3点＝依頼者向け参照画像ラベルで「辺EHの中点・辺GHの中点・頂点A」。
+   依頼者指定の3点＝依頼者向け参照画像ラベルで「頂点E・辺ABの中点・辺ADの中点」。
    引き継ぎメモの対応表は「同じ文字＝同じ点」ではなく、上下が入れ替わる文字の
    組み合わせ（A↔E、B↔F、C↔G、D↔H）である点に注意。正しく変換すると：
-   　依頼者E（上・前左）→ コード内 V.A　　依頼者H（上・後左）→ コード内 V.D
-   　依頼者G（上・後右）→ コード内 V.C　　依頼者A（下・前左）→ コード内 V.E
-   　⇒ 辺EHの中点（依頼者） = mid(V.A, V.D)
-   　⇒ 辺GHの中点（依頼者） = mid(V.C, V.D)
-   　⇒ 頂点A（依頼者）     = V.E
-   ※【設計メモ】実装前にNode.jsで断面の4頂点・辺の長さ・対角線を数値検証済み。
-   　辺の長さは 2.236 / 1.414 / 2.236 / 2.828 の順で、1.414と2.828の2辺が平行
-   　（長さの比2:1）、残り2辺（脚）は2.236で等しく、対角線も3.000で等しいことを
-   　確認済み。これにより「等脚台形」（平行四辺形にはならない）になることを
+   　依頼者E（上・前左）→ コード内 V.A
+   　依頼者A（下・前左）→ コード内 V.E　　依頼者B（下・前右）→ コード内 V.F
+   　依頼者D（下・後左）→ コード内 V.H
+   　⇒ 頂点E（依頼者）     = V.A
+   　⇒ 辺ABの中点（依頼者） = mid(V.E, V.F)
+   　⇒ 辺ADの中点（依頼者） = mid(V.E, V.H)
+   ※【設計メモ】実装前にNode.jsで断面の頂点数・辺の長さを数値検証済み。
+   　断面はちょうど3頂点（TARGET_POINTSの3点そのもの）になり、辺の長さは
+   　2.236 / 1.414 / 2.236 の順（2.236の2辺が等しく、残り1辺が1.414）。
+   　これにより正しく「二等辺三角形」（正三角形にはならない）になることを
    　確認できた。
    ════════════════════════════════════════════════════════════ */
-const TARGET_POINTS = [ mid(V.A, V.D), mid(V.C, V.D), V.E ];
+const TARGET_POINTS = [ V.A, mid(V.E, V.F), mid(V.E, V.H) ];
 
 /* ════════════════════════════════════════════════════════════
    ★汎用処理：3点 → 平面 → 立方体との交点（多角形）を自動計算
@@ -370,8 +371,8 @@ CUBE_EDGES.forEach(([a, b]) => {
 cubeEdgesGroup.renderOrder = 0.6;
 scene.add(cubeEdgesGroup);
 
-/* 赤丸（3点） */
-const markerGeo = new THREE.SphereGeometry(0.06, 20, 20);
+/* 赤丸（3点）※依頼者の要望により、以前(0.06)より大きめのサイズに変更 */
+const markerGeo = new THREE.SphereGeometry(0.1, 20, 20);
 const markerMat = new THREE.MeshBasicMaterial({ color: 0xe8503c });
 const markers = TARGET_POINTS.map(p => {
   const m = new THREE.Mesh(markerGeo, markerMat);
@@ -664,13 +665,13 @@ window.addEventListener('resize', () => {
 /* ════════════════════════════════════════════════════════════
    選択肢（1〜5）
    ════════════════════════════════════════════════════════════ */
-const CORRECT_INDEX = 4; // 正解＝4番（等脚台形）。ダミー図形は五角形／正三角形／六角形／ひし形。
+const CORRECT_INDEX = 5; // 正解＝5番（二等辺三角形）。ダミー図形は五角形／六角形／ひし形／正三角形。
 const SHAPE_SVGS = {
   1: `<svg viewBox="0 0 120 100"><polygon points="60,8 98,36 84,86 36,86 22,36" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  2: `<svg viewBox="0 0 120 100"><polygon points="60,13 100,82 20,82" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  3: `<svg viewBox="0 0 120 100"><polygon points="40,10 80,10 100,50 80,90 40,90 20,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  4: `<svg viewBox="0 0 120 100"><polygon points="45,15 75,15 95,85 25,85" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  5: `<svg viewBox="0 0 120 100"><polygon points="60,5 97,50 60,95 23,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  2: `<svg viewBox="0 0 120 100"><polygon points="40,10 80,10 100,50 80,90 40,90 20,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  3: `<svg viewBox="0 0 120 100"><polygon points="60,5 97,50 60,95 23,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  4: `<svg viewBox="0 0 120 100"><polygon points="60,13 100,82 20,82" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  5: `<svg viewBox="0 0 120 100"><polygon points="60,8 92,90 28,90" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
 };
 
 const choicesContainer = document.getElementById('choices');
@@ -719,7 +720,7 @@ function onChoiceClick(idx, card) {
 
 document.getElementById('btn-replay').addEventListener('click', startPuzzle);
 document.getElementById('btn-next').addEventListener('click', () => {
-  window.location.href = 'cube_cutsurface_isosceles_triangle1.html';
+  window.location.href = 'cutsurface_sample1.html';
 });
 
 startPuzzle();
