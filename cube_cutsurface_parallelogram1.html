@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Puzzle 6 | 3D puzzle</title>
+<title>Puzzle 7 | 3D puzzle</title>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -216,25 +216,26 @@ const CUBE_EDGES = [
   [V.A,V.E],[V.B,V.F],[V.C,V.G],[V.D,V.H], // 垂直
 ];
 const mid = (p, q) => new THREE.Vector3().addVectors(p, q).multiplyScalar(0.5);
+// p から q に向かって t（0〜1）の割合だけ進んだ点（t=0でp、t=1でq）。将来の分割点指定にも再利用可。
+const lerpPoint = (p, q, t) => new THREE.Vector3().lerpVectors(p, q, t);
 
 /* ════════════════════════════════════════════════════════════
    今回の問題：この3点を通る平面で切断する（汎用計算への入力）
-   依頼者指定の3点＝依頼者向け参照画像ラベルで「頂点E・辺ABの中点・辺ADの中点」。
+   依頼者指定の3点＝依頼者向け参照画像ラベルで「頂点E・頂点C・辺GH間（G寄り1/3の位置）」。
    引き継ぎメモの対応表は「同じ文字＝同じ点」ではなく、上下が入れ替わる文字の
    組み合わせ（A↔E、B↔F、C↔G、D↔H）である点に注意。正しく変換すると：
    　依頼者E（上・前左）→ コード内 V.A
-   　依頼者A（下・前左）→ コード内 V.E　　依頼者B（下・前右）→ コード内 V.F
-   　依頼者D（下・後左）→ コード内 V.H
-   　⇒ 頂点E（依頼者）     = V.A
-   　⇒ 辺ABの中点（依頼者） = mid(V.E, V.F)
-   　⇒ 辺ADの中点（依頼者） = mid(V.E, V.H)
-   ※【設計メモ】実装前にNode.jsで断面の頂点数・辺の長さを数値検証済み。
-   　断面はちょうど3頂点（TARGET_POINTSの3点そのもの）になり、辺の長さは
-   　2.236 / 1.414 / 2.236 の順（2.236の2辺が等しく、残り1辺が1.414）。
-   　これにより正しく「二等辺三角形」（正三角形にはならない）になることを
-   　確認できた。
+   　依頼者C（下・後右）→ コード内 V.G
+   　依頼者G（上・後右）→ コード内 V.C　　依頼者H（上・後左）→ コード内 V.D
+   　⇒ 頂点E（依頼者）        = V.A
+   　⇒ 頂点C（依頼者）        = V.G
+   　⇒ 辺GH間・G寄り1/3（依頼者）= V.C から V.D 方向へ1/3の点（V.C寄り）
+   ※【設計メモ】実装前にNode.jsで断面の頂点数・辺の長さ・対角線を数値検証済み。
+   　断面はちょうど4頂点になり、対辺の長さ・方向がそれぞれ一致（2.108／2.404の
+   　組が2組ずつ）、対角線は3.464／2.906と不一致 → 長方形にもひし形にもならない
+   　一般の「平行四辺形」であることを確認できた。
    ════════════════════════════════════════════════════════════ */
-const TARGET_POINTS = [ V.A, mid(V.E, V.F), mid(V.E, V.H) ];
+const TARGET_POINTS = [ V.A, V.G, lerpPoint(V.C, V.D, 1/3) ];
 
 /* ════════════════════════════════════════════════════════════
    ★汎用処理：3点 → 平面 → 立方体との交点（多角形）を自動計算
@@ -665,13 +666,13 @@ window.addEventListener('resize', () => {
 /* ════════════════════════════════════════════════════════════
    選択肢（1〜5）
    ════════════════════════════════════════════════════════════ */
-const CORRECT_INDEX = 5; // 正解＝5番（二等辺三角形）。ダミー図形は五角形／六角形／ひし形／正三角形。
+const CORRECT_INDEX = 3; // 正解＝3番（平行四辺形）。ダミー図形は五角形／六角形／ひし形／縦長長方形。
 const SHAPE_SVGS = {
   1: `<svg viewBox="0 0 120 100"><polygon points="60,8 98,36 84,86 36,86 22,36" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
   2: `<svg viewBox="0 0 120 100"><polygon points="40,10 80,10 100,50 80,90 40,90 20,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  3: `<svg viewBox="0 0 120 100"><polygon points="60,5 97,50 60,95 23,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  4: `<svg viewBox="0 0 120 100"><polygon points="60,13 100,82 20,82" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  5: `<svg viewBox="0 0 120 100"><polygon points="60,8 92,90 28,90" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  3: `<svg viewBox="0 0 120 100"><polygon points="25,25 95,25 75,85 5,85" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  4: `<svg viewBox="0 0 120 100"><polygon points="60,5 97,50 60,95 23,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  5: `<svg viewBox="0 0 120 100"><polygon points="42,15 78,15 78,85 42,85" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
 };
 
 const choicesContainer = document.getElementById('choices');
@@ -720,7 +721,7 @@ function onChoiceClick(idx, card) {
 
 document.getElementById('btn-replay').addEventListener('click', startPuzzle);
 document.getElementById('btn-next').addEventListener('click', () => {
-  window.location.href = 'cube_cutsurface_parallelogram1.html';
+  window.location.href = 'cutsurface_sample1.html';
 });
 
 startPuzzle();
