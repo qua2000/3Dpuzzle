@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Puzzle 8 | 3D puzzle</title>
+<title>Puzzle 9 | 3D puzzle</title>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -173,8 +173,8 @@
 const S = 1.0;              // 立方体の半辺
 const TOP_Y = 2 * S;
 const CENTER_Y = S;
-const PLANE_SIZE = 2.6;     // 切断平面（刃）の大きさ。今回は頂点A付近を切り落とす小さめの三角形断面（重心からの最大距離 約1.03）のため、
-                             // 前回までのパターンより刃を小さくしても十分カバーできることを事前のNode.js検証で確認済み
+const PLANE_SIZE = 3.4;     // 切断平面（刃）の大きさ。断面（正六角形）の対角線幅（重心から最も遠い頂点同士の距離、約2.83）
+                             // より一回り大きく調整（パターン2・4等と同じ値でOKと事前のNode.js検証で確認済み）
 
 const container = document.getElementById('canvas-container');
 const canvas = document.getElementById('c');
@@ -221,27 +221,28 @@ const lerpPoint = (p, q, t) => new THREE.Vector3().addVectors(p, new THREE.Vecto
 
 /* ════════════════════════════════════════════════════════════
    今回の問題：この3点を通る平面で切断する（汎用計算への入力）
-   Puzzle 8では依頼者からA〜Hでの3点指定はなく、「切断面が正三角形にも
-   二等辺三角形にもならない3点（＝不等辺三角形／scalene triangle）」を
-   選ぶことを一任されている。
-   　頂点V.A（上・前左）を切り落とす形で、V.Aから伸びる3本の辺の上に
-   　それぞれ異なる比率で点を取った：
-   　　P1 = lerpPoint(V.A, V.B, 0.4)　… 辺ABをA側から4割進んだ点
-   　　P2 = lerpPoint(V.A, V.D, 0.7)　… 辺ADをA側から7割進んだ点
-   　　P3 = lerpPoint(V.A, V.E, 0.5)　… 辺AEをA側から5割進んだ点
-   　3本の比率をあえて0.4／0.7／0.5とすべて異なる値にすることで、
-   　3辺の長さが同じにならない（＝正三角形にも二等辺三角形にもならない）
-   　ようにした。
-   ※【設計メモ】実装前にNode.jsで断面の頂点数・辺の長さを数値検証済み。
-   　断面はちょうど3頂点（TARGET_POINTSの3点そのもの、頂点Aを切り落とす
-   　コーナーカット）になり、3辺の長さは 1.6125 / 1.7205 / 1.2806 で
-   　互いにすべて異なる → 正三角形にも二等辺三角形にもならない
-   　「不等辺三角形」であることを確認できた。
+   依頼者からの指定：TARGET_POINTS = (Mid_AE, Mid_EH, Mid_GH)
+   　※依頼者向け参照画像でのA〜Hラベルによる指定。
+   　依頼者向けラベルとコード内Vオブジェクトのラベルは天地が逆
+   　（対応表：A↔E、B↔F、C↔G、D↔H、物理的に同じ頂点を指す）ため、
+   　必ず変換してから反映すること：
+   　　依頼者A（下・前左）→ コードE　　依頼者E（上・前左）→ コードA
+   　　依頼者G（上・後右）→ コードC　　依頼者H（上・後左）→ コードD
+   　これにより、
+   　　Mid_AE（依頼者A・E） → mid(コードE, コードA) = mid(V.A, V.E)
+   　　Mid_EH（依頼者E・H） → mid(コードA, コードD) = mid(V.A, V.D)
+   　　Mid_GH（依頼者G・H） → mid(コードC, コードD) = mid(V.C, V.D)
+   　と変換した。
+   ※【設計メモ】実装前にNode.jsで断面を数値検証済み。この3点を通る平面は
+   　立方体の中心を通り、12辺のうち6辺（AD・AE・CD・CG・EF・FG）と交わる
+   　ため、断面は6頂点の多角形になる。6辺の長さはすべて等しく約1.41421、
+   　各内角はすべて120度、各頂点の重心からの距離もすべて等しく約1.41421
+   　→ 正六角形（regular hexagon）であることを確認できた。
    ════════════════════════════════════════════════════════════ */
 const TARGET_POINTS = [
-  lerpPoint(V.A, V.B, 0.4),
-  lerpPoint(V.A, V.D, 0.7),
-  lerpPoint(V.A, V.E, 0.5),
+  mid(V.A, V.E),
+  mid(V.A, V.D),
+  mid(V.C, V.D),
 ];
 
 /* ════════════════════════════════════════════════════════════
@@ -673,13 +674,13 @@ window.addEventListener('resize', () => {
 /* ════════════════════════════════════════════════════════════
    選択肢（1〜5）
    ════════════════════════════════════════════════════════════ */
-const CORRECT_INDEX = 5; // 正解＝5番（不等辺三角形／scalene triangle）。ダミー図形は五角形／六角形／ひし形／二等辺三角形。
+const CORRECT_INDEX = 2; // 正解＝2番（正六角形／regular hexagon）。ダミー図形は五角形／ひし形／等脚台形／三角形。
 const SHAPE_SVGS = {
   1: `<svg viewBox="0 0 120 100"><polygon points="60,8 98,36 84,86 36,86 22,36" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  2: `<svg viewBox="0 0 120 100"><polygon points="40,10 80,10 100,50 80,90 40,90 20,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  2: `<svg viewBox="0 0 120 100"><polygon points="102,50 81,86 39,86 18,50 39,14 81,14" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
   3: `<svg viewBox="0 0 120 100"><polygon points="60,5 97,50 60,95 23,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  4: `<svg viewBox="0 0 120 100"><polygon points="60,8 92,90 28,90" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  5: `<svg viewBox="0 0 120 100"><polygon points="28,20 102,52 58,88" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  4: `<svg viewBox="0 0 120 100"><polygon points="40,15 80,15 100,85 20,85" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  5: `<svg viewBox="0 0 120 100"><polygon points="60,8 92,90 28,90" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
 };
 
 const choicesContainer = document.getElementById('choices');
@@ -728,7 +729,7 @@ function onChoiceClick(idx, card) {
 
 document.getElementById('btn-replay').addEventListener('click', startPuzzle);
 document.getElementById('btn-next').addEventListener('click', () => {
-  window.location.href = 'cube_cutsurface_regular_hexagon1.html';
+  window.location.href = 'cutsurface_sample1.html';
 });
 
 startPuzzle();
