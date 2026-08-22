@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Camera Test - Step 1</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+  #camera-video {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* 画面いっぱいに映像を表示 */
+  }
+  #status {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    padding: 10px 14px;
+    background: rgba(0,0,0,0.6);
+    color: #fff;
+    font-size: 14px;
+    border-radius: 8px;
+    z-index: 10;
+    line-height: 1.5;
+  }
+  #status.error {
+    background: rgba(180,0,0,0.8);
+  }
+  #status.ok {
+    background: rgba(0,120,0,0.6);
+  }
+  #start-button {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 14px 28px;
+    font-size: 16px;
+    border-radius: 999px;
+    border: none;
+    background: #fff;
+    color: #000;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+<video id="camera-video" playsinline autoplay muted></video>
+
+<div id="status">準備中...</div>
+<button id="start-button">カメラを起動</button>
+
+<script>
+const videoEl = document.getElementById('camera-video');
+const statusEl = document.getElementById('status');
+const startButton = document.getElementById('start-button');
+
+function setStatus(message, type) {
+  statusEl.textContent = message;
+  statusEl.className = type || '';
+}
+
+// セキュアコンテキストかどうかを最初にチェック
+if (!window.isSecureContext) {
+  setStatus('エラー: このページはHTTPS（またはlocalhost）で開く必要があります。現在のURL: ' + location.href, 'error');
+} else if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+  setStatus('エラー: このブラウザはカメラAPI(getUserMedia)に対応していません。', 'error');
+} else {
+  setStatus('「カメラを起動」ボタンを押してください', '');
+}
+
+async function startCamera() {
+  setStatus('カメラを起動しています...', '');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' }, // 可能ならスマホの背面カメラを使う
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+
+    videoEl.srcObject = stream;
+
+    // 実際の映像トラック情報を取得して画面に出す（デバッグ用）
+    const track = stream.getVideoTracks()[0];
+    const settings = track.getSettings();
+
+    setStatus(
+      `カメラ起動成功\n` +
+      `解像度: ${settings.width || '?'} x ${settings.height || '?'}\n` +
+      `向き: ${settings.facingMode || '不明'}`,
+      'ok'
+    );
+
+    startButton.style.display = 'none';
+
+  } catch (err) {
+    // エラーの種類によってメッセージを分ける
+    let message = 'カメラの起動に失敗しました: ' + err.name;
+    if (err.name === 'NotAllowedError') {
+      message = 'カメラの使用が許可されませんでした。ブラウザの設定でこのサイトのカメラ権限を確認してください。';
+    } else if (err.name === 'NotFoundError') {
+      message = 'カメラが見つかりませんでした。この端末にカメラが接続されているか確認してください。';
+    } else if (err.name === 'NotReadableError') {
+      message = '他のアプリがカメラを使用中の可能性があります。';
+    }
+    setStatus(message, 'error');
+    console.error(err);
+  }
+}
+
+startButton.addEventListener('click', startCamera);
+</script>
+
+</body>
+</html>
