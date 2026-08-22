@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Camera + Sensors Test - Step 2-3</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+  #camera-video {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #status {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    padding: 10px 14px;
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    font-size: 13px;
+    border-radius: 8px;
+    z-index: 10;
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+  #status.error {
+    background: rgba(180,0,0,0.8);
+  }
+  #status.ok {
+    background: rgba(0,0,0,0.65);
+  }
+  .button-row {
+    position: fixed;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    z-index: 10;
+  }
+  button {
+    padding: 14px 20px;
+    font-size: 14px;
+    border-radius: 999px;
+    border: none;
+    background: #fff;
+    color: #000;
+  }
+  button:disabled {
+    opacity: 0.4;
+  }
+  .label {
+    color: #9cf;
+  }
+</style>
+</head>
+<body>
+
+<video id="camera-video" playsinline autoplay muted></video>
+
+<div id="status">準備中...</div>
+
+<div class="button-row">
+  <button id="start-camera-button">① カメラ起動</button>
+  <button id="start-sensor-button">② 位置情報＋センサー開始</button>
+</div>
+
+<script>
+const videoEl = document.getElementById('camera-video');
+const statusEl = document.getElementById('status');
+const startCameraButton = document.getElementById('start-camera-button');
+const startSensorButton = document.getElementById('start-sensor-button');
+
+// 各種データを保持しておく変数（次のステップで星の計算に使う）
+let currentPosition = null;   // { latitude, longitude }
+let currentHeading = null;    // コンパス方位角 (0=北, 90=東...)
+let currentTilt = null;       // 前後の傾き
+
+let logLines = [];
+
+function render() {
+  statusEl.className = 'ok';
+  statusEl.textContent = logLines.join('\n');
+}
+
+function log(line) {
+  logLines.push(line);
+  render();
+}
+
+function resetLog() {
+  logLines = [];
+}
+
+// ---------- ① カメラ ----------
+
+async function startCamera() {
+  resetLog();
+  log('カメラを起動しています...');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+    videoEl.srcObject = stream;
+    const settings = stream.getVideoTracks()[0].getSettings();
+    logLines = logLines.filter(l => !l.startsWith('カメラを起動'));
+    log(`[カメラ] OK 解像度:${settings.width}x${settings.height}`);
+    startCameraButton.disabled = true;
+  } catch (err) {
+    log('[カメラ] エラー: ' + err.name);
+    statusEl.className = 'error';
+  }
+}
+
+// ---------- ② 位置情報 ----------
+
+function startGeolocation() {
+  if (!navigator.geolocation) {
+    log('[位置情報] このブラウザは非対応です');
+    return;
+  }
+  log('[位置情報] 取得中...');
+  navigator.geolocation.watchPosition(
+    (position) => {
+      currentPosition = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      };
+      updateDisplay();
+    },
+    (err) => {
+      log('[位置情報] エラー: ' + err.message);
+    },
+    {
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 10000
+    }
+  );
+}
+
+// ---------- ③ 端末の向き ----------
+
+function handleOrientation(event) {
+  // webkitCompassHeading: iOSのみ提供される「真の」コンパス方位角(0=北)
+  // alpha: 標準仕様の値だが、端末や状況によって基準がずれることがある
+  if (typeof event.webkitCompassHeading === 'number') {
+    currentHeading = event.webkitCompassHeading;
+  } else if (typeof event.alpha === 'number') {
+    currentHeading = 360 - event.alpha; // 多くの端末でこの変換が実際の方位に近い
+  }
+
+  // beta: 端末を垂直に立てた状態が基準になることが多い前後の傾き
+  if (typeof event.beta === 'number') {
+    currentTilt = event.beta;
+  }
+
+  updateDisplay();
+}
+
+async function startSensors() {
+  startGeolocation();
+
+  // iOS 13+ は明示的な許可要求が必要
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const permission = await DeviceOrientationEvent.requestPermission();
+      if (permission === 'granted') {
+        window.addEventListener('deviceorientation', handleOrientation);
+        log('[センサー] 許可されました (iOS)');
+      } else {
+        log('[センサー] 許可が拒否されました');
+      }
+    } catch (err) {
+      log('[センサー] エラー: ' + err.message);
+    }
+  } else if ('DeviceOrientationEvent' in window) {
+    // Android など、許可ダイアログ不要のケース
+    window.addEventListener('deviceorientation', handleOrientation);
+    log('[センサー] 開始しました (Android等)');
+  } else {
+    log('[センサー] このブラウザは非対応です');
+  }
+
+  startSensorButton.disabled = true;
+}
+
+// ---------- 表示更新 ----------
+
+function updateDisplay() {
+  const lines = logLines.filter(l =>
+    !l.startsWith('[位置情報]') && !l.startsWith('[向き]')
+  );
+
+  if (currentPosition) {
+    lines.push(`[位置情報] 緯度:${currentPosition.latitude.toFixed(5)} 経度:${currentPosition.longitude.toFixed(5)}`);
+  } else {
+    lines.push('[位置情報] 取得待ち...');
+  }
+
+  if (currentHeading !== null) {
+    lines.push(`[向き] 方位角:${currentHeading.toFixed(1)}° 傾き:${currentTilt !== null ? currentTilt.toFixed(1) : '?'}°`);
+  } else {
+    lines.push('[向き] 取得待ち... (端末を動かしてみてください)');
+  }
+
+  logLines = lines;
+  render();
+}
+
+startCameraButton.addEventListener('click', startCamera);
+startSensorButton.addEventListener('click', startSensors);
+
+resetLog();
+log('①→②の順にボタンを押してください');
+</script>
+
+</body>
+</html>
