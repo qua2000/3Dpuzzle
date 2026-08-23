@@ -221,14 +221,42 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
+let wakeLock = null;
+let cameraStream = null;
+
+// 画面のスリープを防止する(対応端末のみ)。フリーズ対策の中心となる処理
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch (err) {
+    console.log('[WakeLock] 取得失敗:', err.message);
+  }
+}
+
+// タブ/画面が再度表示された際、WakeLockと映像の両方を復帰させる
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    if ('wakeLock' in navigator) {
+      await requestWakeLock();
+    }
+    if (videoEl.paused && cameraStream) {
+      videoEl.play().catch(() => {});
+    }
+  }
+});
+
 async function startCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false
     });
+    cameraStream = stream;
     videoEl.srcObject = stream;
     startCameraButton.disabled = true;
+    await requestWakeLock();
   } catch (err) {
     alert('[カメラ] エラー: ' + err.name);
   }
@@ -285,6 +313,7 @@ applyTestTimeButton.addEventListener('click', () => {
   if (testDatetimeInput.value) {
     testDate = new Date(testDatetimeInput.value); // 端末のローカル時刻として解釈される
   }
+  testModePanel.classList.remove('open'); // 反映したらパネルを自動で閉じる
 });
 clearTestTimeButton.addEventListener('click', () => {
   testDate = null;
