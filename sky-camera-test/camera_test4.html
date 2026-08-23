@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Star List Test - Step 4</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+  #camera-video {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  #status {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 10px 14px;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    font-size: 12px;
+    border-radius: 8px;
+    z-index: 10;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .button-row {
+    position: fixed;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    z-index: 10;
+  }
+  button {
+    padding: 14px 20px;
+    font-size: 14px;
+    border-radius: 999px;
+    border: none;
+    background: #fff;
+    color: #000;
+  }
+  button:disabled { opacity: 0.4; }
+  .visible-star { color: #7f7; }
+  .hidden-star { color: #888; }
+</style>
+</head>
+<body>
+
+<video id="camera-video" playsinline autoplay muted></video>
+<div id="status">準備中...</div>
+
+<div class="button-row">
+  <button id="start-camera-button">① カメラ起動</button>
+  <button id="start-sensor-button">② 位置情報＋センサー開始</button>
+</div>
+
+<script>
+// =========================================================
+// 1. 天文計算ロジック（プラネタリウムプロジェクトから流用・拡張）
+// =========================================================
+
+function degToRad(d) { return d * Math.PI / 180; }
+function radToDeg(r) { return r * 180 / Math.PI; }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+function hmsToHours(h, m, s) {
+  return h + m / 60 + s / 3600;
+}
+function dmsToDegrees(sign, d, m, s) {
+  return sign * (d + m / 60 + s / 3600);
+}
+
+// 新規追加: 現在のUTC日時から、その地点(経度)の地方恒星時(LST)を計算する
+// Node.jsで数値検証済み(J2000.0基準値18.697375h、恒星日と太陽日の差分と一致)
+function getJulianDate(date) {
+  return date.getTime() / 86400000 + 2440587.5;
+}
+function getGMSTHours(date) {
+  const JD = getJulianDate(date);
+  const D = JD - 2451545.0;
+  const T = D / 36525;
+  let GMST = 280.46061837 + 360.98564736629 * D + 0.000387933 * T * T - (T * T * T) / 38710000;
+  GMST = ((GMST % 360) + 360) % 360;
+  return GMST / 15;
+}
+function getLST(date, lonDeg) {
+  const gmst = getGMSTHours(date);
+  let lst = gmst + lonDeg / 15;
+  return ((lst % 24) + 24) % 24;
+}
+
+// プラネタリウムプロジェクトから流用: 赤経・赤緯 → 高度・方位角
+function raDecToAltAz(raHours, decDeg, latDeg, lstHours) {
+  const H = (lstHours - raHours) * 15;
+
+  const latRad = degToRad(latDeg);
+  const decRad = degToRad(decDeg);
+  const hRad = degToRad(H);
+
+  const sinAlt = Math.sin(decRad) * Math.sin(latRad) +
+                  Math.cos(decRad) * Math.cos(latRad) * Math.cos(hRad);
+  const alt = Math.asin(clamp(sinAlt, -1, 1));
+
+  const cosAz = (Math.sin(decRad) - Math.sin(alt) * Math.sin(latRad)) /
+                 (Math.cos(alt) * Math.cos(latRad));
+  let az = Math.acos(clamp(cosAz, -1, 1));
+
+  if (Math.sin(hRad) > 0) {
+    az = Math.PI * 2 - az;
+  }
+
+  return {
+    altDeg: radToDeg(alt),
+    azDeg: radToDeg(az),
+  };
+}
+
+// =========================================================
+// 2. オリオン座16星データ（既存プロジェクトからそのまま流用）
+// =========================================================
+const starData = [
+  { id: 's1',  name: 'Betelgeuse', ra: [5, 55, 10.3], dec: [+1, 7, 24, 25] },
+  { id: 's2',  name: 'Meissa',     ra: [5, 35, 8.3],  dec: [+1, 9, 56, 3] },
+  { id: 's3',  name: 'Bellatrix',  ra: [5, 25, 7.9],  dec: [+1, 6, 20, 59] },
+  { id: 's4',  name: 'Rigel',      ra: [5, 14, 32.3], dec: [-1, 8, 12, 6] },
+  { id: 's5',  name: 'Saiph',      ra: [5, 47, 45.4], dec: [-1, 9, 40, 11] },
+  { id: 's6',  name: 'Alnitak',    ra: [5, 40, 45.5], dec: [-1, 1, 56, 34] },
+  { id: 's7',  name: 'Alnilam',    ra: [5, 36, 12.8], dec: [-1, 1, 12, 7] },
+  { id: 's8',  name: 'Mintaka',    ra: [5, 32, 0.4],  dec: [-1, 0, 17, 57] },
+  { id: 's9',  name: 'Mu Ori',     ra: [6, 2, 23.0],  dec: [+1, 9, 38, 50] },
+  { id: 's10', name: 'Xi Ori',     ra: [6, 11, 56.4], dec: [+1, 14, 12, 32] },
+  { id: 's11', name: 'Nu Ori',     ra: [6, 7, 34.3],  dec: [+1, 14, 46, 7] },
+  { id: 's12', name: 'Chi1 Ori',   ra: [5, 54, 23.0], dec: [+1, 20, 16, 35] },
+  { id: 's13', name: 'Pi2 Ori',    ra: [4, 50, 36.7], dec: [+1, 8, 54, 1] },
+  { id: 's14', name: 'Pi3 Ori',    ra: [4, 49, 50.4], dec: [+1, 6, 57, 41] },
+  { id: 's15', name: 'Pi4 Ori',    ra: [4, 51, 12.4], dec: [+1, 5, 36, 18] },
+  { id: 's16', name: 'Pi5 Ori',    ra: [4, 54, 15.1], dec: [+1, 2, 26, 26] },
+];
+starData.forEach(star => {
+  star.raHours = hmsToHours(star.ra[0], star.ra[1], star.ra[2]);
+  star.decDeg = dmsToDegrees(star.dec[0], star.dec[1], star.dec[2], star.dec[3]);
+});
+
+// =========================================================
+// 3. カメラ・センサー（前回までのコードを流用）
+// =========================================================
+const videoEl = document.getElementById('camera-video');
+const statusEl = document.getElementById('status');
+const startCameraButton = document.getElementById('start-camera-button');
+const startSensorButton = document.getElementById('start-sensor-button');
+
+let currentPosition = null;
+let currentHeading = null;
+let currentTilt = null;
+let logLines = ['①→②の順にボタンを押してください'];
+
+function render() {
+  statusEl.textContent = logLines.join('\n');
+}
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    videoEl.srcObject = stream;
+    logLines.push('[カメラ] OK');
+    render();
+    startCameraButton.disabled = true;
+  } catch (err) {
+    logLines.push('[カメラ] エラー: ' + err.name);
+    render();
+  }
+}
+
+function startGeolocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(
+    (position) => {
+      currentPosition = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+      updateStarList();
+    },
+    (err) => { logLines.push('[位置情報] エラー: ' + err.message); render(); },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+}
+
+function handleOrientation(event) {
+  if (typeof event.webkitCompassHeading === 'number') {
+    currentHeading = event.webkitCompassHeading;
+  } else if (typeof event.alpha === 'number') {
+    currentHeading = 360 - event.alpha;
+  }
+  if (typeof event.beta === 'number') {
+    currentTilt = event.beta;
+  }
+  updateStarList();
+}
+
+async function startSensors() {
+  startGeolocation();
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      const permission = await DeviceOrientationEvent.requestPermission();
+      if (permission === 'granted') {
+        window.addEventListener('deviceorientation', handleOrientation);
+      } else {
+        logLines.push('[センサー] 許可が拒否されました');
+        render();
+      }
+    } catch (err) {
+      logLines.push('[センサー] エラー: ' + err.message);
+      render();
+    }
+  } else if ('DeviceOrientationEvent' in window) {
+    window.addEventListener('deviceorientation', handleOrientation);
+  }
+  startSensorButton.disabled = true;
+}
+
+// =========================================================
+// 4. 見える星のリストを毎回再計算して表示（ステップ4の本体）
+// =========================================================
+function updateStarList() {
+  const lines = [];
+
+  if (!currentPosition) {
+    lines.push('[位置情報] 取得待ち...');
+    logLines = lines;
+    render();
+    return;
+  }
+
+  const now = new Date();
+  const lst = getLST(now, currentPosition.longitude);
+
+  lines.push(`緯度:${currentPosition.latitude.toFixed(3)} 経度:${currentPosition.longitude.toFixed(3)}`);
+  lines.push(`現在時刻(UTC): ${now.toISOString()}`);
+  lines.push(`LST(地方恒星時): ${lst.toFixed(3)}h`);
+  if (currentHeading !== null) {
+    lines.push(`端末の向き: 方位角${currentHeading.toFixed(1)}° 傾き${currentTilt !== null ? currentTilt.toFixed(1) : '?'}°`);
+  }
+  lines.push('---');
+  lines.push('星名          高度(alt)  方位角(az)');
+
+  const results = starData.map(star => {
+    const { altDeg, azDeg } = raDecToAltAz(star.raHours, star.decDeg, currentPosition.latitude, lst);
+    return { name: star.name, altDeg, azDeg };
+  });
+
+  // 高度が高い順に並べ替えて見やすくする
+  results.sort((a, b) => b.altDeg - a.altDeg);
+
+  results.forEach(r => {
+    const visible = r.altDeg > 0;
+    const mark = visible ? '🟢' : '⚫';
+    const name = r.name.padEnd(14, ' ');
+    lines.push(`${mark} ${name} ${r.altDeg.toFixed(1).padStart(6)}°  ${r.azDeg.toFixed(1).padStart(6)}°`);
+  });
+
+  logLines = lines;
+  render();
+}
+
+startCameraButton.addEventListener('click', startCamera);
+startSensorButton.addEventListener('click', startSensors);
+render();
+</script>
+
+</body>
+</html>
