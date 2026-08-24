@@ -114,6 +114,7 @@
   <button id="start-camera-button">① カメラ起動</button>
   <button id="start-sensor-button">② 位置情報＋センサー開始</button>
   <button id="toggle-test-mode-button">テスト日時モード</button>
+  <button id="toggle-names-button">Name表示 ON/OFF</button>
 </div>
 
 <script>
@@ -204,6 +205,7 @@ const statusEl = document.getElementById('status');
 const startCameraButton = document.getElementById('start-camera-button');
 const startSensorButton = document.getElementById('start-sensor-button');
 const toggleTestModeButton = document.getElementById('toggle-test-mode-button');
+const toggleNamesButton = document.getElementById('toggle-names-button');
 const testModePanel = document.getElementById('test-mode-panel');
 const testDatetimeInput = document.getElementById('test-datetime');
 const applyTestTimeButton = document.getElementById('apply-test-time');
@@ -213,6 +215,15 @@ let currentPosition = null;
 let currentHeading = null;
 let currentTilt = null;
 let testDate = null; // nullなら現在時刻を使う
+
+// Name機能用の状態
+let showAllNames = false;           // ON/OFFボタンで切り替え
+let tappedStar = null;              // { x, y, name, time } タップした星の情報
+const TAP_LABEL_DURATION_MS = 4000; // タップ後、名前を表示し続ける時間
+const TAP_HIT_RADIUS_PX = 40;       // タップ判定の許容範囲(px)
+let starScreenPositions = [];       // 毎フレーム更新される、画面に描画された星の座標一覧
+
+canvasEl.style.pointerEvents = 'auto'; // タップ判定のためcanvasへのポインタイベントを有効化
 
 function resizeCanvas() {
   canvasEl.width = window.innerWidth;
@@ -309,6 +320,44 @@ async function startSensors() {
 toggleTestModeButton.addEventListener('click', () => {
   testModePanel.classList.toggle('open');
 });
+
+toggleNamesButton.addEventListener('click', () => {
+  showAllNames = !showAllNames;
+});
+
+function getTapCoords(evt) {
+  const rect = canvasEl.getBoundingClientRect();
+  return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+}
+
+canvasEl.addEventListener('click', (evt) => {
+  const { x, y } = getTapCoords(evt);
+  let nearest = null;
+  let nearestDist = Infinity;
+  starScreenPositions.forEach(s => {
+    const dist = Math.hypot(s.x - x, s.y - y);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = s;
+    }
+  });
+  if (nearest && nearestDist <= TAP_HIT_RADIUS_PX) {
+    tappedStar = { x: nearest.x, y: nearest.y, name: nearest.name, time: Date.now() };
+  }
+});
+
+// 星名ラベルを描画する共通関数(背景付きで読みやすくする)
+function drawStarLabel(x, y, text) {
+  ctx.font = '13px sans-serif';
+  const paddingX = 6, paddingY = 4;
+  const textWidth = ctx.measureText(text).width;
+  const boxX = x + 10;
+  const boxY = y - 10 - 13;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(boxX - paddingX, boxY - paddingY, textWidth + paddingX * 2, 13 + paddingY * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(text, boxX, boxY + 11);
+}
 applyTestTimeButton.addEventListener('click', () => {
   if (testDatetimeInput.value) {
     testDate = new Date(testDatetimeInput.value); // 端末のローカル時刻として解釈される
@@ -353,6 +402,7 @@ function drawFrame() {
 
     let visibleCount = 0;
     let drawnCount = 0;
+    starScreenPositions = []; // 毎フレーム、画面に描画された星の座標をリセットして記録し直す
 
     starData.forEach(star => {
       const { altDeg, azDeg } = raDecToAltAz(star.raHours, star.decDeg, currentPosition.latitude, lst);
@@ -370,6 +420,7 @@ function drawFrame() {
       const y = canvasEl.height / 2 - (altDiff / (CONFIG.FOV_VERTICAL_DEG / 2)) * (canvasEl.height / 2);
 
       drawnCount++;
+      starScreenPositions.push({ x, y, name: star.name });
 
       // 星を描画
       ctx.beginPath();
@@ -379,7 +430,21 @@ function drawFrame() {
       ctx.shadowBlur = 8;
       ctx.fill();
       ctx.shadowBlur = 0;
+
+      // ON/OFFボタンがONなら、常時すべての星の名前を表示
+      if (showAllNames) {
+        drawStarLabel(x, y, star.name);
+      }
     });
+
+    // タップで選択した星の名前を、一定時間だけ表示
+    if (!showAllNames && tappedStar) {
+      if (Date.now() - tappedStar.time < TAP_LABEL_DURATION_MS) {
+        drawStarLabel(tappedStar.x, tappedStar.y, tappedStar.name);
+      } else {
+        tappedStar = null;
+      }
+    }
 
     statusLines.push(`地平線上の星:${visibleCount} / 画面内に描画:${drawnCount}`);
   }
