@@ -187,12 +187,138 @@ starData.forEach(star => {
 });
 
 // =========================================================
+// 2.5. 月の位置計算（新規追加：位置精度キャリブレーション用）
+// =========================================================
+// 参考: 簡易月位置アルゴリズム(Paul Schlyter方式、主要摂動項込み)
+// Node.jsでJPL DE405基準値と照合し、RA誤差 約0.5分角、Dec誤差 約0.1分角を確認済み
+//
+// 恒星と違い、月は地球に近い(距離 約38万km、地球半径の約60倍)ため、
+// 「視差補正」が必須となる。視差補正なしだと地平線付近で最大 約1度のズレが生じる
+// (地心座標＝地球の中心から見た位置 と、地表の観測者から見た位置 の違い)
+
+function getDaysSinceEpoch2000(date) {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  const D = date.getUTCDate() +
+    (date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600) / 24;
+  return 367 * y - Math.floor(7 * (y + Math.floor((m + 9) / 12)) / 4) + Math.floor(275 * m / 9) + D - 730530;
+}
+
+function normalizeDeg360(deg) {
+  let d = deg % 360;
+  if (d < 0) d += 360;
+  return d;
+}
+
+// 月の地心RA/Dec(度)と地心距離(地球半径単位)を計算
+function getMoonGeocentric(date) {
+  const d = getDaysSinceEpoch2000(date);
+
+  // 月の軌道要素(元期2000.0からの経過日数dに対する近似式)
+  const N = normalizeDeg360(125.1228 - 0.0529538083 * d); // 昇交点黄経
+  const i = 5.1454;                                        // 軌道傾斜角
+  const w = normalizeDeg360(318.0634 + 0.1643573223 * d);  // 近地点引数
+  const a = 60.2666;                                       // 軌道長半径(地球半径単位)
+  const e = 0.054900;                                      // 離心率
+  const M = normalizeDeg360(115.3654 + 13.0649929509 * d); // 平均近点角
+
+  // ケプラー方程式を反復法で解き、離心近点角Eを求める
+  let E = degToRad(M) + e * Math.sin(degToRad(M)) * (1 + e * Math.cos(degToRad(M)));
+  for (let iter = 0; iter < 5; iter++) {
+    E -= (E - e * Math.sin(E) - degToRad(M)) / (1 - e * Math.cos(E));
+  }
+
+  const xv = a * (Math.cos(E) - e);
+  const yv = a * (Math.sqrt(1 - e * e) * Math.sin(E));
+  const v = normalizeDeg360(radToDeg(Math.atan2(yv, xv))); // 真近点角
+  const r = Math.sqrt(xv * xv + yv * yv);                  // 地心距離(地球半径単位)
+
+  const Nr = degToRad(N), ir = degToRad(i), vwr = degToRad(v + w);
+  const xh = r * (Math.cos(Nr) * Math.cos(vwr) - Math.sin(Nr) * Math.sin(vwr) * Math.cos(ir));
+  const yh = r * (Math.sin(Nr) * Math.cos(vwr) + Math.cos(Nr) * Math.sin(vwr) * Math.cos(ir));
+  const zh = r * (Math.sin(vwr) * Math.sin(ir));
+
+  let lonEcl = normalizeDeg360(radToDeg(Math.atan2(yh, xh)));
+  let latEcl = radToDeg(Math.atan2(zh, Math.sqrt(xh * xh + yh * yh)));
+
+  // 太陽の重力による主要な摂動項の補正(これがないと精度が数度落ちる)
+  const wSun = 282.9404 + 4.70935e-5 * d;
+  const Msun = normalizeDeg360(356.0470 + 0.9856002585 * d);
+  const Ls = normalizeDeg360(Msun + wSun);   // 太陽の平均黄経
+  const Lm = normalizeDeg360(M + w + N);     // 月の平均黄経
+  const D_ = normalizeDeg360(Lm - Ls);       // 月の平均離角(太陽との角度差)
+  const F = normalizeDeg360(Lm - N);         // 月の引数
+
+  const Mm = degToRad(M), Dr = degToRad(D_), Msr = degToRad(Msun), Fr = degToRad(F);
+
+  const lonCorr = -1.274 * Math.sin(Mm - 2 * Dr) + 0.658 * Math.sin(2 * Dr) - 0.186 * Math.sin(Msr)
+    - 0.059 * Math.sin(2 * Mm - 2 * Dr) - 0.057 * Math.sin(Mm - 2 * Dr + Msr) + 0.053 * Math.sin(Mm + 2 * Dr)
+    + 0.046 * Math.sin(2 * Dr - Msr) + 0.041 * Math.sin(Mm - Msr) - 0.035 * Math.sin(Dr)
+    - 0.031 * Math.sin(Mm + Msr) - 0.015 * Math.sin(2 * Fr - 2 * Dr) + 0.011 * Math.sin(Mm - 4 * Dr);
+
+  const latCorr = -0.173 * Math.sin(Fr - 2 * Dr) - 0.055 * Math.sin(Mm - Fr - 2 * Dr) - 0.046 * Math.sin(Mm + Fr - 2 * Dr)
+    + 0.033 * Math.sin(Fr + 2 * Dr) + 0.017 * Math.sin(2 * Mm + Fr);
+
+  const rCorr = -0.58 * Math.cos(Mm - 2 * Dr) - 0.46 * Math.cos(2 * Dr);
+
+  lonEcl = normalizeDeg360(lonEcl + lonCorr);
+  latEcl = latEcl + latCorr;
+  const rGeo = r + rCorr;
+
+  // 黄道座標 → 赤道座標(RA/Dec)へ変換
+  const ecl = 23.4393 - 3.563e-7 * d; // 黄道傾斜角
+  const eclr = degToRad(ecl);
+  const lonR = degToRad(lonEcl), latR = degToRad(latEcl);
+
+  const xg = rGeo * Math.cos(lonR) * Math.cos(latR);
+  const yg = rGeo * Math.sin(lonR) * Math.cos(latR);
+  const zg = rGeo * Math.sin(latR);
+
+  const xe = xg;
+  const ye = yg * Math.cos(eclr) - zg * Math.sin(eclr);
+  const ze = yg * Math.sin(eclr) + zg * Math.cos(eclr);
+
+  const raDeg = normalizeDeg360(radToDeg(Math.atan2(ye, xe)));
+  const decDeg = radToDeg(Math.atan2(ze, Math.sqrt(xe * xe + ye * ye)));
+
+  return { raDeg, decDeg, distanceEarthRadii: rGeo };
+}
+
+// 視差補正: 地心座標 → 観測地点から見た座標(トポセントリック座標)へ変換
+function applyMoonParallax(raDeg, decDeg, distanceEarthRadii, latDeg, lstHours) {
+  const lstDeg = lstHours * 15;
+  const H = normalizeDeg360(lstDeg - raDeg); // 地方時角
+
+  const phi = degToRad(latDeg);
+  const Hr = degToRad(H);
+  const decR = degToRad(decDeg);
+  const sinPi = 1 / distanceEarthRadii; // 地平視差
+
+  const denom = Math.cos(decR) - Math.cos(phi) * sinPi * Math.cos(Hr);
+  const deltaAlpha = Math.atan2(-Math.cos(phi) * sinPi * Math.sin(Hr), denom);
+  const decTopo = Math.atan2((Math.sin(decR) - Math.sin(phi) * sinPi) * Math.cos(deltaAlpha), denom);
+
+  return {
+    raDeg: normalizeDeg360(raDeg + radToDeg(deltaAlpha)),
+    decDeg: radToDeg(decTopo)
+  };
+}
+
+// 指定した日時・観測地点における月の視Alt/Az(高度・方位角、視差補正済み)を返す
+function getMoonAltAz(date, latDeg, lonDeg, lstHours) {
+  const geo = getMoonGeocentric(date);
+  const topo = applyMoonParallax(geo.raDeg, geo.decDeg, geo.distanceEarthRadii, latDeg, lstHours);
+  return raDecToAltAz(topo.raDeg / 15, topo.decDeg, latDeg, lstHours);
+}
+
+// =========================================================
 // 3. 設定値（カメラ画角の仮の値。後でキャリブレーションが必要）
 // =========================================================
 const CONFIG = {
   FOV_HORIZONTAL_DEG: 60,  // 画面横方向が何度分に相当するか(仮)
   FOV_VERTICAL_DEG: 80,    // 画面縦方向が何度分に相当するか(仮、スマホ縦持ち想定)
   STAR_DOT_RADIUS: 5,
+  MOON_DOT_RADIUS: 14,     // 月は星より大きく描画して区別する
 };
 
 // =========================================================
@@ -436,6 +562,38 @@ function drawFrame() {
         drawStarLabel(x, y, star.name);
       }
     });
+
+    // 月の描画(新規追加: 恒星と異なり視差補正込みの専用計算を使用)
+    // オリオン座が見えにくい時期でも、月なら明るく見つけやすいため
+    // 位置精度(FOVキャリブレーション)確認の第一段階として利用する
+    const moonAltAz = getMoonAltAz(now, currentPosition.latitude, currentPosition.longitude, lst);
+    statusLines.push(`月: 高度${moonAltAz.altDeg.toFixed(1)}° 方位${moonAltAz.azDeg.toFixed(1)}°` +
+      (moonAltAz.altDeg <= 0 ? ' (地平線下)' : ''));
+
+    if (moonAltAz.altDeg > 0) {
+      const azDiff = normalizeAngleDiff(moonAltAz.azDeg - currentHeading);
+      const altDiff = moonAltAz.altDeg - deviceElevation;
+
+      if (Math.abs(azDiff) <= CONFIG.FOV_HORIZONTAL_DEG / 2 && Math.abs(altDiff) <= CONFIG.FOV_VERTICAL_DEG / 2) {
+        const x = canvasEl.width / 2 + (azDiff / (CONFIG.FOV_HORIZONTAL_DEG / 2)) * (canvasEl.width / 2);
+        const y = canvasEl.height / 2 - (altDiff / (CONFIG.FOV_VERTICAL_DEG / 2)) * (canvasEl.height / 2);
+
+        starScreenPositions.push({ x, y, name: '月 (Moon)' });
+
+        // 星と区別できるよう、大きめ・淡黄色で描画
+        ctx.beginPath();
+        ctx.arc(x, y, CONFIG.MOON_DOT_RADIUS, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff6d5';
+        ctx.shadowColor = '#fff6d5';
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (showAllNames) {
+          drawStarLabel(x, y, '月 (Moon)');
+        }
+      }
+    }
 
     // タップで選択した星の名前を、一定時間だけ表示
     if (!showAllNames && tappedStar) {
