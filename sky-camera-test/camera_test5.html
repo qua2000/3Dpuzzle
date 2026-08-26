@@ -319,6 +319,11 @@ const CONFIG = {
   FOV_VERTICAL_DEG: 80,    // 画面縦方向が何度分に相当するか(仮、スマホ縦持ち想定)
   STAR_DOT_RADIUS: 5,
   MOON_DOT_RADIUS: 14,     // 月は星より大きく描画して区別する
+  ELEVATION_OFFSET_DEG: 6, // 仰角計算の経験的補正値(新規追加)
+  // 実測(2026/8/26)で、tilt-90の仮定だけだとマーカーが実際より
+  // 約6°低く表示される傾向が確認されたため、その分を差し引く。
+  // 端末の持ち方の癖等による可能性があり、今後さらにデータが増えれば
+  // 再調整が必要かもしれない。
 };
 
 // =========================================================
@@ -519,7 +524,8 @@ function drawFrame() {
     const lst = getLST(now, currentPosition.longitude);
 
     // 端末が向いている「仰角」。beta=90が水平(地平線)を向いている状態に相当すると仮定
-    const deviceElevation = (currentTilt !== null ? currentTilt : 90) - 90;
+    // + 実測に基づく補正値(CONFIG.ELEVATION_OFFSET_DEG)を差し引く(新規追加)
+    const deviceElevation = (currentTilt !== null ? currentTilt : 90) - 90 - CONFIG.ELEVATION_OFFSET_DEG;
 
     statusLines.push(
       (testDate ? '[テスト日時使用] ' : '[現在時刻] ') + now.toLocaleString('ja-JP')
