@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Puzzle 12 | 3D puzzle</title>
+<title>Puzzle 11 | 3D puzzle</title>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -173,8 +173,8 @@
 const S = 1.0;              // 立方体の半辺
 const TOP_Y = 2 * S;
 const CENTER_Y = S;
-const PLANE_SIZE = 3.4;     // 切断平面（刃）の大きさ。断面（五角形）の最大頂点間距離（約2.86）
-                             // より一回り大きく調整（パターン2・4・9等と同じ値でOKと事前のNode.js検証で確認済み）
+const PLANE_SIZE = 3.4;     // 切断平面（刃）の大きさ。断面（非正六角形）の最大頂点間距離（約2.91）
+                             // より一回り大きく調整（他パターンと同じ値でOKと事前のNode.js検証で確認済み）
 
 const container = document.getElementById('canvas-container');
 const canvas = document.getElementById('c');
@@ -220,59 +220,35 @@ const mid = (p, q) => new THREE.Vector3().addVectors(p, q).multiplyScalar(0.5);
 const lerpPoint = (p, q, t) => new THREE.Vector3().addVectors(p, new THREE.Vector3().subVectors(q, p).multiplyScalar(t)); // p→qにtの割合だけ進んだ点（t=0でp、t=1でq）
 
 /* ════════════════════════════════════════════════════════════
-   【8/24追記】このファイルはPuzzle 10として最初に作成したものだが、
-   依頼者から「難易度が高いパターン」として、新たに作成した別の
-   五角形パターン（TARGET_POINTS = (H, Mid_AB, Mid_BC)、
-   cube_cutsurface_pentagon1.html）をPuzzle 10とし、本ファイルは
-   Puzzle 11（cube_cutsurface_pentagon2.html）として、そちらの
-   次に配置することになった（内容・TARGET_POINTSに変更なし、
-   タイトルとファイル名・並び順のみ変更）。
-   【8/31追記】新たに非正六角形パターン（cube_cutsurface_hexagon1.html）
-   がPuzzle 11として本ファイルの直前に挿入されたため、本ファイルは
-   Puzzle 12に改番した（内容・TARGET_POINTS・次へボタンの遷移先
-   〔cutsurface_sample1.html＝Puzzle Xのまま〕に変更なし、
-   タイトル表記のみPuzzle 11→Puzzle 12に変更）。
-
    今回の問題：この3点を通る平面で切断する（汎用計算への入力）
-   依頼者からの当初のご提案：TARGET_POINTS = (E, Mid_AB, Mid_BC)
+   依頼者からの指定：TARGET_POINTS = (Mid_AE, EHの3等分点でH寄り, GHの3等分点でH寄り)
    　※依頼者向け参照画像でのA〜Hラベルによる指定。
    　依頼者向けラベルとコード内Vオブジェクトのラベルは天地が逆
    　（対応表：A↔E、B↔F、C↔G、D↔H、物理的に同じ頂点を指す）ため、
    　必ず変換してから反映すること：
-   　　依頼者E（上・前左）→ コードA
-   　　依頼者A（下・前左）→ コードE　　依頼者B（下・前右）→ コードF
-   　　依頼者C（下・後右）→ コードG
+   　　依頼者A（下・前左）→ コードE　　依頼者E（上・前左）→ コードA
+   　　依頼者G（上・後右）→ コードC　　依頼者H（上・後左）→ コードD
    　これにより、
-   　　E（依頼者E）        → コードA = V.A
-   　　Mid_AB（依頼者A・B） → mid(コードE, コードF) = mid(V.E, V.F)
-   　　Mid_BC（依頼者B・C） → mid(コードF, コードG) = mid(V.F, V.G)
-   　と変換し、事前にNode.jsで検証したところ、この3点を通る平面は
-   　立方体の頂点C（依頼者G）もちょうど通ってしまい、断面が4頂点の
-   　四角形になってしまうことが判明した（五角形にならない）。
-   　依頼者からは「切断面が五角形であれば他のTARGET_POINTSでも構わない」
-   　とのご了承をいただいていたため、以下の3点に変更して五角形になる
-   　ことをNode.jsで確認した上で採用した。
-   　　依頼者E（上・前左）→ コードA
-   　　依頼者F（下・前右）→ コードB
-   　　依頼者H（上・後左）→ コードD
-   　　依頼者C（下・後右）→ コードG
-   　　Point1：辺E-F（依頼者ラベル）上、Eから1/3の点
-   　　　→ 辺A-B（コード）上、Aから1/3の点 = lerpPoint(V.A, V.B, 1/3)
-   　　Point2：辺E-H（依頼者ラベル）上、Eから2/3の点
+   　　Mid_AE（依頼者A・E）
+   　　　→ mid(コードE, コードA) = mid(V.A, V.E)
+   　　EHの3等分点でH寄り（依頼者E・H、E→Hの2/3の点）
    　　　→ 辺A-D（コード）上、Aから2/3の点 = lerpPoint(V.A, V.D, 2/3)
-   　　Point3：辺G-C（依頼者ラベル）の中点
-   　　　→ 辺C-G（コード）の中点 = mid(V.C, V.G)
-   ※【設計メモ】実装前にNode.jsで断面を数値検証済み。この3点を通る平面は、
-   　12辺のうち5辺（AB・AD・BF・CG・DH）と交わるため、断面は5頂点の
-   　多角形（五角形）になる。5辺の長さは約2.05／1.45／1.49／0.68／2.18、
-   　各内角は約85.3°／94.7°／114.3°／151.0°／94.7°（すべて180°未満＝
-   　凹みのない凸五角形）であり、正五角形ではない不等辺の五角形
-   　（pentagon）であることを確認した。
+   　　GHの3等分点でH寄り（依頼者G・H、G→Hの2/3の点）
+   　　　→ 辺C-D（コード）上、Cから2/3の点 = lerpPoint(V.C, V.D, 2/3)
+   　と変換した（Puzzle 9・正六角形パターンと同じ3辺の組を使うが、今回は
+   　中点ではなく2/3の分割点を使うため、正六角形にはならない）。
+   ※【設計メモ】実装前にNode.jsで断面を数値検証済み。この3点を通る平面は
+   　立方体の中心を通り、12辺のうち6辺（CD・DA・EF・FG・AE・CG）と交わる
+   　ため、断面は6頂点の多角形になる。6辺の長さは約0.9428／1.6667／1.6667／
+   　0.9428／1.6667／1.6667（短辺2本・長辺4本、左右対称）、各内角は約
+   　124.45°／124.45°／111.10°／124.45°／124.45°／111.10°（すべて180°未満
+   　＝凹みのない凸六角形）であり、左右対称だが正六角形ではない六角形
+   　（hexagon）であることを確認した。断面の最大頂点間距離は約2.9059。
    ════════════════════════════════════════════════════════════ */
 const TARGET_POINTS = [
-  lerpPoint(V.A, V.B, 1 / 3),
+  mid(V.A, V.E),
   lerpPoint(V.A, V.D, 2 / 3),
-  mid(V.C, V.G),
+  lerpPoint(V.C, V.D, 2 / 3),
 ];
 
 /* ════════════════════════════════════════════════════════════
@@ -704,10 +680,11 @@ window.addEventListener('resize', () => {
 /* ════════════════════════════════════════════════════════════
    選択肢（1〜5）
    ════════════════════════════════════════════════════════════ */
-const CORRECT_INDEX = 2; // 正解＝2番（五角形／pentagon）。ダミー図形は正六角形／ひし形／等脚台形／三角形。
+const CORRECT_INDEX = 2; // 正解＝2番（六角形／hexagon、正六角形ではない）。ダミー図形は五角形／ひし形／等脚台形／三角形。
 const SHAPE_SVGS = {
-  1: `<svg viewBox="0 0 120 100"><polygon points="102,50 81,86 39,86 18,50 39,14 81,14" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
-  2: `<svg viewBox="0 0 120 100"><polygon points="60,8 98,36 84,86 36,86 22,36" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  1: `<svg viewBox="0 0 120 100"><polygon points="60,8 98,36 84,86 36,86 22,36" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
+  // 2番：今回の断面（左右対称・短辺2本＋長辺4本の非正六角形）の実形状に基づく六角形
+  2: `<svg viewBox="0 0 120 100"><polygon points="47,12 73,12 100,50 73,89 47,89 20,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
   3: `<svg viewBox="0 0 120 100"><polygon points="60,5 97,50 60,95 23,50" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
   4: `<svg viewBox="0 0 120 100"><polygon points="40,15 80,15 100,85 20,85" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
   5: `<svg viewBox="0 0 120 100"><polygon points="60,8 92,90 28,90" fill="rgba(221,51,51,0.35)" stroke="#dd6666" stroke-width="3"/></svg>`,
@@ -759,7 +736,7 @@ function onChoiceClick(idx, card) {
 
 document.getElementById('btn-replay').addEventListener('click', startPuzzle);
 document.getElementById('btn-next').addEventListener('click', () => {
-  window.location.href = 'cutsurface_sample1.html';
+  window.location.href = 'cube_cutsurface_pentagon2.html';
 });
 
 startPuzzle();
