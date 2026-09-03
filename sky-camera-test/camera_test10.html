@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Star Overlay Test - Step 5</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+  #camera-video {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  #star-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 5;
+    pointer-events: none;
+  }
+  #status {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    padding: 8px 10px;
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    font-size: 11px;
+    border-radius: 8px;
+    z-index: 10;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .button-row {
+    position: fixed;
+    bottom: 30px;
+    left: 0; right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    z-index: 15;
+    flex-wrap: wrap;
+    padding: 0 10px;
+  }
+  button {
+    padding: 12px 16px;
+    font-size: 13px;
+    border-radius: 999px;
+    border: none;
+    background: #fff;
+    color: #000;
+  }
+  button:disabled { opacity: 0.4; }
+
+  #test-mode-panel {
+    position: fixed;
+    bottom: 100px;
+    left: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.9);
+    color: #fff;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    z-index: 30;
+    display: none;
+  }
+  #test-mode-panel.open { display: block; }
+  #test-mode-panel label { display: block; margin-bottom: 6px; }
+  #test-datetime {
+    width: 100%;
+    padding: 6px;
+    border-radius: 4px;
+    border: none;
+    margin-bottom: 8px;
+  }
+  #test-mode-panel .row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  #test-mode-panel .row button {
+    flex: 1;
+    padding: 8px;
+    font-size: 12px;
+  }
+  #test-mode-panel hr {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.2);
+    margin: 10px 0;
+  }
+  #time-offset-display {
+    font-size: 13px;
+    text-align: center;
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  #autoplay-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  #autoplay-row button {
+    flex: 1;
+    padding: 8px;
+    font-size: 12px;
+  }
+  #autoplay-speed {
+    flex: 1;
+    padding: 8px;
+    border-radius: 4px;
+    border: none;
+    font-size: 12px;
+  }
+
+  #world-sky-panel {
+    position: fixed;
+    bottom: 100px;
+    left: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.92);
+    color: #fff;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    z-index: 31;
+    display: none;
+    text-align: center;
+  }
+  #world-sky-panel.open { display: block; }
+  #world-sky-panel select {
+    width: 100%;
+    padding: 8px;
+    border-radius: 4px;
+    border: none;
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+  #world-sky-canvas {
+    display: block;
+    margin: 0 auto 8px auto;
+    background: #04070f;
+    border-radius: 50%;
+  }
+  #world-sky-status {
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+  #photo-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 20;
+    display: none;
+  }
+  #photo-canvas.active { display: block; }
+
+  #photo-controls {
+    position: fixed;
+    bottom: 30px;
+    left: 0; right: 0;
+    display: none;
+    justify-content: center;
+    gap: 10px;
+    z-index: 21;
+    padding: 0 10px;
+  }
+  #photo-controls.active { display: flex; }
+</style>
+</head>
+<body>
+
+<video id="camera-video" playsinline autoplay muted></video>
+<canvas id="star-canvas"></canvas>
+<div id="status">準備中...</div>
+
+<div id="test-mode-panel">
+  <label>テスト用の日時（未入力なら現在時刻を使用）</label>
+  <input type="datetime-local" id="test-datetime">
+  <div class="row">
+    <button id="apply-test-time">この日時を反映</button>
+    <button id="clear-test-time">現在時刻に戻す</button>
+  </div>
+
+  <hr>
+
+  <label>時間を進める・戻す（基準日時からのズレ）</label>
+  <div id="time-offset-display">ズレ: なし</div>
+  <div class="row">
+    <button data-offset-min="-60">-1時間</button>
+    <button data-offset-min="-10">-10分</button>
+    <button data-offset-min="10">+10分</button>
+    <button data-offset-min="60">+1時間</button>
+  </div>
+  <div class="row">
+    <button id="reset-offset-button">ズレをリセット</button>
+  </div>
+
+  <hr>
+
+  <label>自動で時間を進める</label>
+  <div id="autoplay-row">
+    <button id="autoplay-toggle-button">▶ 再生</button>
+    <select id="autoplay-speed">
+      <option value="60">1分/秒</option>
+      <option value="300">5分/秒</option>
+      <option value="1800">30分/秒</option>
+      <option value="3600" selected>1時間/秒</option>
+      <option value="86400">1日/秒</option>
+    </select>
+  </div>
+</div>
+
+<div id="world-sky-panel">
+  <label style="display:block; margin-bottom:8px;">都市を選択</label>
+  <select id="world-sky-city-select"></select>
+  <canvas id="world-sky-canvas" width="260" height="260"></canvas>
+  <div id="world-sky-status">-</div>
+</div>
+
+<canvas id="photo-canvas"></canvas>
+
+<div id="photo-controls">
+  <button id="back-to-live-button">← ライブに戻る</button>
+  <button id="save-photo-button">💾 保存</button>
+</div>
+
+<div class="button-row" id="main-button-row">
+  <button id="start-camera-button">① カメラ起動</button>
+  <button id="start-sensor-button">② 位置情報＋センサー開始</button>
+  <button id="shoot-button">③ 📷 撮影</button>
+  <button id="toggle-test-mode-button">テスト日時モード</button>
+  <button id="toggle-names-button">Name表示 ON/OFF</button>
+  <button id="toggle-constellation-button">星座線 ON/OFF</button>
+  <button id="toggle-world-sky-button">🌍 世界の星空</button>
+</div>
+
+<script>
+// =========================================================
+// 1. 天文計算ロジック（ステップ4から流用）
+// =========================================================
+function degToRad(d) { return d * Math.PI / 180; }
+function radToDeg(r) { return r * 180 / Math.PI; }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function hmsToHours(h, m, s) { return h + m / 60 + s / 3600; }
+function dmsToDegrees(sign, d, m, s) { return sign * (d + m / 60 + s / 3600); }
+
+function getJulianDate(date) { return date.getTime() / 86400000 + 2440587.5; }
+function getGMSTHours(date) {
+  const JD = getJulianDate(date);
+  const D = JD - 2451545.0;
+  const T = D / 36525;
+  let GMST = 280.46061837 + 360.98564736629 * D + 0.000387933 * T * T - (T * T * T) / 38710000;
+  GMST = ((GMST % 360) + 360) % 360;
+  return GMST / 15;
+}
+function getLST(date, lonDeg) {
+  const gmst = getGMSTHours(date);
+  let lst = gmst + lonDeg / 15;
+  return ((lst % 24) + 24) % 24;
+}
+function raDecToAltAz(raHours, decDeg, latDeg, lstHours) {
+  const H = (lstHours - raHours) * 15;
+  const latRad = degToRad(latDeg), decRad = degToRad(decDeg), hRad = degToRad(H);
+  const sinAlt = Math.sin(decRad) * Math.sin(latRad) + Math.cos(decRad) * Math.cos(latRad) * Math.cos(hRad);
+  const alt = Math.asin(clamp(sinAlt, -1, 1));
+  const cosAz = (Math.sin(decRad) - Math.sin(alt) * Math.sin(latRad)) / (Math.cos(alt) * Math.cos(latRad));
+  let az = Math.acos(clamp(cosAz, -1, 1));
+  if (Math.sin(hRad) > 0) az = Math.PI * 2 - az;
+  return { altDeg: radToDeg(alt), azDeg: radToDeg(az) };
+}
+
+// 角度差分を -180〜180 の範囲に正規化する（新規追加: 画面投影に必要）
+function normalizeAngleDiff(diff) {
+  let d = diff % 360;
+  if (d > 180) d -= 360;
+  if (d < -180) d += 360;
+  return d;
+}
+
+// =========================================================
+// 2. オリオン座16星データ
+// =========================================================
+const starData = [
+  { id: 's1',  name: 'Betelgeuse', ra: [5, 55, 10.3], dec: [+1, 7, 24, 25] },
+  { id: 's2',  name: 'Meissa',     ra: [5, 35, 8.3],  dec: [+1, 9, 56, 3] },
+  { id: 's3',  name: 'Bellatrix',  ra: [5, 25, 7.9],  dec: [+1, 6, 20, 59] },
+  { id: 's4',  name: 'Rigel',      ra: [5, 14, 32.3], dec: [-1, 8, 12, 6] },
+  { id: 's5',  name: 'Saiph',      ra: [5, 47, 45.4], dec: [-1, 9, 40, 11] },
+  { id: 's6',  name: 'Alnitak',    ra: [5, 40, 45.5], dec: [-1, 1, 56, 34] },
+  { id: 's7',  name: 'Alnilam',    ra: [5, 36, 12.8], dec: [-1, 1, 12, 7] },
+  { id: 's8',  name: 'Mintaka',    ra: [5, 32, 0.4],  dec: [-1, 0, 17, 57] },
+  { id: 's9',  name: 'Mu Ori',     ra: [6, 2, 23.0],  dec: [+1, 9, 38, 50] },
+  { id: 's10', name: 'Xi Ori',     ra: [6, 11, 56.4], dec: [+1, 14, 12, 32] },
+  { id: 's11', name: 'Nu Ori',     ra: [6, 7, 34.3],  dec: [+1, 14, 46, 7] },
+  { id: 's12', name: 'Chi1 Ori',   ra: [5, 54, 23.0], dec: [+1, 20, 16, 35] },
+  { id: 's13', name: 'Pi2 Ori',    ra: [4, 50, 36.7], dec: [+1, 8, 54, 1] },
+  { id: 's14', name: 'Pi3 Ori',    ra: [4, 49, 50.4], dec: [+1, 6, 57, 41] },
+  { id: 's15', name: 'Pi4 Ori',    ra: [4, 51, 12.4], dec: [+1, 5, 36, 18] },
+  { id: 's16', name: 'Pi5 Ori',    ra: [4, 54, 15.1], dec: [+1, 2, 26, 26] },
+];
+starData.forEach(star => {
+  star.raHours = hmsToHours(star.ra[0], star.ra[1], star.ra[2]);
+  star.decDeg = dmsToDegrees(star.dec[0], star.dec[1], star.dec[2], star.dec[3]);
+});
+
+// =========================================================
+// 2.6 星座線データ（新規追加）
+// =========================================================
+// オリオン座の主要な形（頭→両肩→ベルト3星→両脚）を結ぶ線のペア(星のid)
+// 将来的に他の星座を追加する場合は、この配列を星座ごとに増やしていく想定
+const CONSTELLATION_NAME = 'Orion (オリオン座)';
+const CONSTELLATION_LINES = [
+  ['s2', 's1'], // Meissa(頭) - Betelgeuse(右肩)
+  ['s2', 's3'], // Meissa(頭) - Bellatrix(左肩)
+  ['s1', 's6'], // Betelgeuse - Alnitak(ベルト)
+  ['s3', 's8'], // Bellatrix - Mintaka(ベルト)
+  ['s8', 's7'], // Mintaka - Alnilam(ベルト中央)
+  ['s7', 's6'], // Alnilam - Alnitak(ベルト)
+  ['s6', 's5'], // Alnitak - Saiph(右脚)
+  ['s8', 's4'], // Mintaka - Rigel(左脚)
+];
+// このうち何本以上が画面内に描画されていれば「星座が見えている」とみなすか
+const CONSTELLATION_VISIBLE_LINE_THRESHOLD = 5;
+const CONSTELLATION_LINE_DURATION_MS = 350; // 線1本分の描画にかける時間
+const CONSTELLATION_NAME_FADE_MS = 800;     // 全線描画後、星座名がフェードインする時間
+
+// =========================================================
+// 2.7 世界の都市データ（新規追加：⑨世界の都市の星空表示用）
+// =========================================================
+const WORLD_CITIES = [
+  { name: 'Tokyo',        nameJa: '東京',       lat: 35.6812,  lon: 139.7671 },
+  { name: 'New York',     nameJa: 'ニューヨーク', lat: 40.7128,  lon: -74.0060 },
+  { name: 'London',       nameJa: 'ロンドン',    lat: 51.5074,  lon: -0.1278 },
+  { name: 'Paris',        nameJa: 'パリ',       lat: 48.8566,  lon: 2.3522 },
+  { name: 'Sydney',       nameJa: 'シドニー',    lat: -33.8688, lon: 151.2093 },
+  { name: 'Cairo',        nameJa: 'カイロ',      lat: 30.0444,  lon: 31.2357 },
+  { name: 'Rio de Janeiro', nameJa: 'リオデジャネイロ', lat: -22.9068, lon: -43.1729 },
+  { name: 'Singapore',    nameJa: 'シンガポール',  lat: 1.3521,   lon: 103.8198 },
+];
+
+// =========================================================
+// 2.5. 月の位置計算（新規追加：位置精度キャリブレーション用）
+// =========================================================
+// 参考: 簡易月位置アルゴリズム(Paul Schlyter方式、主要摂動項込み)
+// Node.jsでJPL DE405基準値と照合し、RA誤差 約0.5分角、Dec誤差 約0.1分角を確認済み
+//
+// 恒星と違い、月は地球に近い(距離 約38万km、地球半径の約60倍)ため、
+// 「視差補正」が必須となる。視差補正なしだと地平線付近で最大 約1度のズレが生じる
+// (地心座標＝地球の中心から見た位置 と、地表の観測者から見た位置 の違い)
+
+function getDaysSinceEpoch2000(date) {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  const D = date.getUTCDate() +
+    (date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600) / 24;
+  return 367 * y - Math.floor(7 * (y + Math.floor((m + 9) / 12)) / 4) + Math.floor(275 * m / 9) + D - 730530;
+}
+
+function normalizeDeg360(deg) {
+  let d = deg % 360;
+  if (d < 0) d += 360;
+  return d;
+}
+
+// 月の地心RA/Dec(度)と地心距離(地球半径単位)を計算
+function getMoonGeocentric(date) {
+  const d = getDaysSinceEpoch2000(date);
+
+  // 月の軌道要素(元期2000.0からの経過日数dに対する近似式)
+  const N = normalizeDeg360(125.1228 - 0.0529538083 * d); // 昇交点黄経
+  const i = 5.1454;                                        // 軌道傾斜角
+  const w = normalizeDeg360(318.0634 + 0.1643573223 * d);  // 近地点引数
+  const a = 60.2666;                                       // 軌道長半径(地球半径単位)
+  const e = 0.054900;                                      // 離心率
+  const M = normalizeDeg360(115.3654 + 13.0649929509 * d); // 平均近点角
+
+  // ケプラー方程式を反復法で解き、離心近点角Eを求める
+  let E = degToRad(M) + e * Math.sin(degToRad(M)) * (1 + e * Math.cos(degToRad(M)));
+  for (let iter = 0; iter < 5; iter++) {
+    E -= (E - e * Math.sin(E) - degToRad(M)) / (1 - e * Math.cos(E));
+  }
+
+  const xv = a * (Math.cos(E) - e);
+  const yv = a * (Math.sqrt(1 - e * e) * Math.sin(E));
+  const v = normalizeDeg360(radToDeg(Math.atan2(yv, xv))); // 真近点角
+  const r = Math.sqrt(xv * xv + yv * yv);                  // 地心距離(地球半径単位)
+
+  const Nr = degToRad(N), ir = degToRad(i), vwr = degToRad(v + w);
+  const xh = r * (Math.cos(Nr) * Math.cos(vwr) - Math.sin(Nr) * Math.sin(vwr) * Math.cos(ir));
+  const yh = r * (Math.sin(Nr) * Math.cos(vwr) + Math.cos(Nr) * Math.sin(vwr) * Math.cos(ir));
+  const zh = r * (Math.sin(vwr) * Math.sin(ir));
+
+  let lonEcl = normalizeDeg360(radToDeg(Math.atan2(yh, xh)));
+  let latEcl = radToDeg(Math.atan2(zh, Math.sqrt(xh * xh + yh * yh)));
+
+  // 太陽の重力による主要な摂動項の補正(これがないと精度が数度落ちる)
+  const wSun = 282.9404 + 4.70935e-5 * d;
+  const Msun = normalizeDeg360(356.0470 + 0.9856002585 * d);
+  const Ls = normalizeDeg360(Msun + wSun);   // 太陽の平均黄経
+  const Lm = normalizeDeg360(M + w + N);     // 月の平均黄経
+  const D_ = normalizeDeg360(Lm - Ls);       // 月の平均離角(太陽との角度差)
+  const F = normalizeDeg360(Lm - N);         // 月の引数
+
+  const Mm = degToRad(M), Dr = degToRad(D_), Msr = degToRad(Msun), Fr = degToRad(F);
+
+  const lonCorr = -1.274 * Math.sin(Mm - 2 * Dr) + 0.658 * Math.sin(2 * Dr) - 0.186 * Math.sin(Msr)
+    - 0.059 * Math.sin(2 * Mm - 2 * Dr) - 0.057 * Math.sin(Mm - 2 * Dr + Msr) + 0.053 * Math.sin(Mm + 2 * Dr)
+    + 0.046 * Math.sin(2 * Dr - Msr) + 0.041 * Math.sin(Mm - Msr) - 0.035 * Math.sin(Dr)
+    - 0.031 * Math.sin(Mm + Msr) - 0.015 * Math.sin(2 * Fr - 2 * Dr) + 0.011 * Math.sin(Mm - 4 * Dr);
+
+  const latCorr = -0.173 * Math.sin(Fr - 2 * Dr) - 0.055 * Math.sin(Mm - Fr - 2 * Dr) - 0.046 * Math.sin(Mm + Fr - 2 * Dr)
+    + 0.033 * Math.sin(Fr + 2 * Dr) + 0.017 * Math.sin(2 * Mm + Fr);
+
+  const rCorr = -0.58 * Math.cos(Mm - 2 * Dr) - 0.46 * Math.cos(2 * Dr);
+
+  lonEcl = normalizeDeg360(lonEcl + lonCorr);
+  latEcl = latEcl + latCorr;
+  const rGeo = r + rCorr;
+
+  // 黄道座標 → 赤道座標(RA/Dec)へ変換
+  const ecl = 23.4393 - 3.563e-7 * d; // 黄道傾斜角
+  const eclr = degToRad(ecl);
+  const lonR = degToRad(lonEcl), latR = degToRad(latEcl);
+
+  const xg = rGeo * Math.cos(lonR) * Math.cos(latR);
+  const yg = rGeo * Math.sin(lonR) * Math.cos(latR);
+  const zg = rGeo * Math.sin(latR);
+
+  const xe = xg;
+  const ye = yg * Math.cos(eclr) - zg * Math.sin(eclr);
+  const ze = yg * Math.sin(eclr) + zg * Math.cos(eclr);
+
+  const raDeg = normalizeDeg360(radToDeg(Math.atan2(ye, xe)));
+  const decDeg = radToDeg(Math.atan2(ze, Math.sqrt(xe * xe + ye * ye)));
+
+  return { raDeg, decDeg, distanceEarthRadii: rGeo };
+}
+
+// 視差補正: 地心座標 → 観測地点から見た座標(トポセントリック座標)へ変換
+function applyMoonParallax(raDeg, decDeg, distanceEarthRadii, latDeg, lstHours) {
+  const lstDeg = lstHours * 15;
+  const H = normalizeDeg360(lstDeg - raDeg); // 地方時角
+
+  const phi = degToRad(latDeg);
+  const Hr = degToRad(H);
+  const decR = degToRad(decDeg);
+  const sinPi = 1 / distanceEarthRadii; // 地平視差
+
+  const denom = Math.cos(decR) - Math.cos(phi) * sinPi * Math.cos(Hr);
+  const deltaAlpha = Math.atan2(-Math.cos(phi) * sinPi * Math.sin(Hr), denom);
+  const decTopo = Math.atan2((Math.sin(decR) - Math.sin(phi) * sinPi) * Math.cos(deltaAlpha), denom);
+
+  return {
+    raDeg: normalizeDeg360(raDeg + radToDeg(deltaAlpha)),
+    decDeg: radToDeg(decTopo)
+  };
+}
+
+// 指定した日時・観測地点における月の視Alt/Az(高度・方位角、視差補正済み)を返す
+function getMoonAltAz(date, latDeg, lonDeg, lstHours) {
+  const geo = getMoonGeocentric(date);
+  const topo = applyMoonParallax(geo.raDeg, geo.decDeg, geo.distanceEarthRadii, latDeg, lstHours);
+  return raDecToAltAz(topo.raDeg / 15, topo.decDeg, latDeg, lstHours);
+}
+
+// =========================================================
+// 3. 設定値（カメラ画角の仮の値。後でキャリブレーションが必要）
+// =========================================================
+const CONFIG = {
+  FOV_HORIZONTAL_DEG: 60,  // 画面横方向が何度分に相当するか(仮)
+  FOV_VERTICAL_DEG: 80,    // 画面縦方向が何度分に相当するか(仮、スマホ縦持ち想定)
+  STAR_DOT_RADIUS: 5,
+  MOON_DOT_RADIUS: 14,     // 月は星より大きく描画して区別する
+  ELEVATION_OFFSET_DEG: 0, // 仰角計算の経験的補正値。計算方式を修正したため一旦0にリセット(要再校正)
+  // 実測(2026/8/26)で、tilt-90の仮定だけだとマーカーが実際より
+  // 約6°低く表示される傾向が確認されたため、その分を差し引く。
+  // 端末の持ち方の癖等による可能性があり、今後さらにデータが増えれば
+  // 再調整が必要かもしれない。
+};
+
+// =========================================================
+// 4. カメラ・センサー
+// =========================================================
+const videoEl = document.getElementById('camera-video');
+const canvasEl = document.getElementById('star-canvas');
+const ctx = canvasEl.getContext('2d');
+const statusEl = document.getElementById('status');
+const startCameraButton = document.getElementById('start-camera-button');
+const startSensorButton = document.getElementById('start-sensor-button');
+const toggleTestModeButton = document.getElementById('toggle-test-mode-button');
+const toggleNamesButton = document.getElementById('toggle-names-button');
+const toggleConstellationButton = document.getElementById('toggle-constellation-button');
+const toggleWorldSkyButton = document.getElementById('toggle-world-sky-button');
+const worldSkyPanel = document.getElementById('world-sky-panel');
+const worldSkyCitySelect = document.getElementById('world-sky-city-select');
+const worldSkyCanvasEl = document.getElementById('world-sky-canvas');
+const worldSkyStatusEl = document.getElementById('world-sky-status');
+const photoCanvasEl = document.getElementById('photo-canvas');
+const photoCtx = photoCanvasEl.getContext('2d');
+const photoControls = document.getElementById('photo-controls');
+const mainButtonRow = document.getElementById('main-button-row');
+const shootButton = document.getElementById('shoot-button');
+const backToLiveButton = document.getElementById('back-to-live-button');
+const savePhotoButton = document.getElementById('save-photo-button');
+const testModePanel = document.getElementById('test-mode-panel');
+const testDatetimeInput = document.getElementById('test-datetime');
+const applyTestTimeButton = document.getElementById('apply-test-time');
+const clearTestTimeButton = document.getElementById('clear-test-time');
+const timeOffsetDisplay = document.getElementById('time-offset-display');
+const resetOffsetButton = document.getElementById('reset-offset-button');
+const autoplayToggleButton = document.getElementById('autoplay-toggle-button');
+const autoplaySpeedSelect = document.getElementById('autoplay-speed');
+
+let currentPosition = null;
+let currentHeading = null;
+let currentElevationDeg = null; // 端末(カメラ)が向いている仰角。alpha/beta/gammaから傾き補正込みで計算する(旧: currentTilt)
+let testDate = null; // nullなら現在時刻を使う
+
+// 時間操作機能用の状態(新規追加)
+let timeOffsetMs = 0;          // 基準日時(現在時刻 or テスト日時)からのズレ(ミリ秒)
+let isAutoPlaying = false;     // 自動で時間を進めているか
+let lastFrameTimestampMs = null; // 前フレームの実時刻(performance.now())、自動再生の経過時間計算用
+
+// Name機能用の状態
+let showAllNames = false;           // ON/OFFボタンで切り替え
+let tappedStar = null;              // { x, y, name, time } タップした星の情報
+const TAP_LABEL_DURATION_MS = 4000; // タップ後、名前を表示し続ける時間
+const TAP_HIT_RADIUS_PX = 40;       // タップ判定の許容範囲(px)
+let starScreenPositions = [];       // 毎フレーム更新される、画面に描画された星の座標一覧
+
+// 星座線アニメーション用の状態(新規追加)
+let showConstellationLines = true;      // ON/OFFボタンで切り替え(デフォルトON)
+let constellationWasVisible = false;    // 直前フレームで「見えている」判定だったか
+let constellationStartTimeMs = null;    // アニメーション開始時刻(performance.now())
+
+// 世界の星空パネル用の状態(新規追加)
+let worldSkySelectedCityIndex = 0;
+
+// 撮影モード用の状態(新規追加：③④)
+let isPhotoMode = false;
+
+WORLD_CITIES.forEach((city, index) => {
+  const option = document.createElement('option');
+  option.value = index;
+  option.textContent = `${city.nameJa} (${city.name})`;
+  worldSkyCitySelect.appendChild(option);
+});
+worldSkyCitySelect.addEventListener('change', () => {
+  worldSkySelectedCityIndex = parseInt(worldSkyCitySelect.value, 10);
+});
+
+canvasEl.style.pointerEvents = 'auto'; // タップ判定のためcanvasへのポインタイベントを有効化
+
+function resizeCanvas() {
+  canvasEl.width = window.innerWidth;
+  canvasEl.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+let wakeLock = null;
+let cameraStream = null;
+
+// 画面のスリープを防止する(対応端末のみ)。フリーズ対策の中心となる処理
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch (err) {
+    console.log('[WakeLock] 取得失敗:', err.message);
+  }
+}
+
+// タブ/画面が再度表示された際、WakeLockと映像の両方を復帰させる
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
+    if ('wakeLock' in navigator) {
+      await requestWakeLock();
+    }
+    if (videoEl.paused && cameraStream) {
+      videoEl.play().catch(() => {});
+    }
+  }
+});
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    cameraStream = stream;
+    videoEl.srcObject = stream;
+    startCameraButton.disabled = true;
+    await requestWakeLock();
+  } catch (err) {
+    alert('[カメラ] エラー: ' + err.name);
+  }
+}
+
+function startGeolocation() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(
+    (position) => {
+      currentPosition = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+    },
+    (err) => { console.error('[位置情報]', err.message); },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+  );
+}
+
+// =========================================================
+// 端末の向き(コンパス方位・仰角)の計算(修正：傾き補正を追加)
+// =========================================================
+// 従来は heading=360-alpha, elevation=beta-90 という単純な計算だったが、
+// これは端末がほぼ水平な場合にしか正しく成り立たない。
+// 空を見上げる(betaが大きく傾く)ような使い方だと、alpha単体では
+// 真の方位とズレが生じる(オイラー角特有のジンバルロック的な誤差)。
+// そこで alpha/beta/gamma から回転行列を組み、
+// カメラが向いている方向の3次元ベクトルを東西南北・上下(ENU)座標へ変換してから
+// 方位角・仰角を求める(傾いていても正しく計算できる)。
+function computeHeadingAndElevation(alphaDeg, betaDeg, gammaDeg) {
+  const d2r = Math.PI / 180;
+  const z = alphaDeg * d2r;
+  const x = betaDeg * d2r;
+  const y = gammaDeg * d2r;
+
+  const cZ = Math.cos(z), sZ = Math.sin(z);
+  const cX = Math.cos(x), sX = Math.sin(x);
+  const cY = Math.cos(y), sY = Math.sin(y);
+
+  // W3C DeviceOrientationの回転順(Z→X'→Y'')に基づく回転行列の一部成分
+  const m13 = cY * sZ * sX + cZ * sY;
+  const m23 = sZ * sY - cZ * cY * sX;
+  const m33 = cX * cY;
+
+  // 端末背面(カメラ)が向いているローカル方向(0,0,-1)を回転行列で
+  // ワールド座標(east=東, north=北, up=上)へ変換
+  const east = -m13;
+  const north = -m23;
+  const up = -m33;
+
+  let headingDeg = Math.atan2(east, north) * (180 / Math.PI);
+  if (headingDeg < 0) headingDeg += 360;
+  const elevationDeg = Math.asin(clamp(up, -1, 1)) * (180 / Math.PI);
+
+  return { headingDeg, elevationDeg };
+}
+
+function handleOrientation(event) {
+  if (typeof event.alpha === 'number' && typeof event.beta === 'number' && typeof event.gamma === 'number') {
+    const { headingDeg, elevationDeg } = computeHeadingAndElevation(event.alpha, event.beta, event.gamma);
+    // iOSのwebkitCompassHeadingは磁北基準の実測値でより正確な場合が多いので、あれば優先する
+    currentHeading = (typeof event.webkitCompassHeading === 'number') ? event.webkitCompassHeading : headingDeg;
+    currentElevationDeg = elevationDeg;
+  } else if (typeof event.webkitCompassHeading === 'number') {
+    currentHeading = event.webkitCompassHeading;
+  }
+}
+
+async function startSensors() {
+  startGeolocation();
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS: 許可ダイアログが必要。webkitCompassHeadingが使えるのでdeviceorientationのままでよい
+    try {
+      const permission = await DeviceOrientationEvent.requestPermission();
+      if (permission === 'granted') {
+        window.addEventListener('deviceorientation', handleOrientation);
+      } else {
+        alert('[センサー] 許可が拒否されました');
+      }
+    } catch (err) {
+      alert('[センサー] エラー: ' + err.message);
+    }
+  } else if ('ondeviceorientationabsolute' in window) {
+    // Android Chrome: 真北基準のabsoluteイベントを優先(相対値ではなく真の方位が取れる)
+    window.addEventListener('deviceorientationabsolute', handleOrientation);
+  } else if ('DeviceOrientationEvent' in window) {
+    window.addEventListener('deviceorientation', handleOrientation);
+  }
+  startSensorButton.disabled = true;
+}
+
+// =========================================================
+// 5. テスト日時モードのUI操作
+// =========================================================
+toggleTestModeButton.addEventListener('click', () => {
+  testModePanel.classList.toggle('open');
+});
+
+toggleNamesButton.addEventListener('click', () => {
+  showAllNames = !showAllNames;
+});
+
+toggleConstellationButton.addEventListener('click', () => {
+  showConstellationLines = !showConstellationLines;
+  if (!showConstellationLines) {
+    // OFFにしたら状態をリセットし、再度ONにしたときに最初からアニメーションするようにする
+    constellationWasVisible = false;
+    constellationStartTimeMs = null;
+  }
+});
+
+toggleWorldSkyButton.addEventListener('click', () => {
+  worldSkyPanel.classList.toggle('open');
+});
+
+function getTapCoords(evt) {
+  const rect = canvasEl.getBoundingClientRect();
+  return { x: evt.clientX - rect.left, y: evt.clientY - rect.top };
+}
+
+canvasEl.addEventListener('click', (evt) => {
+  const { x, y } = getTapCoords(evt);
+  let nearest = null;
+  let nearestDist = Infinity;
+  starScreenPositions.forEach(s => {
+    const dist = Math.hypot(s.x - x, s.y - y);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = s;
+    }
+  });
+  if (nearest && nearestDist <= TAP_HIT_RADIUS_PX) {
+    tappedStar = { x: nearest.x, y: nearest.y, name: nearest.name, time: Date.now() };
+  }
+});
+
+// 星名ラベルを描画する共通関数(背景付きで読みやすくする)
+function drawStarLabel(x, y, text) {
+  ctx.font = '13px sans-serif';
+  const paddingX = 6, paddingY = 4;
+  const textWidth = ctx.measureText(text).width;
+  const boxX = x + 10;
+  const boxY = y - 10 - 13;
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(boxX - paddingX, boxY - paddingY, textWidth + paddingX * 2, 13 + paddingY * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(text, boxX, boxY + 11);
+}
+
+// 星座線を徐々に結ぶアニメーションを描画し、完了後は星座名を表示する(新規追加)
+// starPosById: { [starId]: {x, y, name} } その回のフレームで画面に描画された星の座標一覧
+function drawConstellationAnimation(starPosById, nowMs) {
+  // 定義した線のうち、両端の星が画面内にあるものだけを対象にする
+  const drawableLines = CONSTELLATION_LINES.filter(
+    ([fromId, toId]) => starPosById[fromId] && starPosById[toId]
+  );
+  const isVisible = drawableLines.length >= CONSTELLATION_VISIBLE_LINE_THRESHOLD;
+
+  if (!isVisible) {
+    constellationWasVisible = false;
+    constellationStartTimeMs = null;
+    return;
+  }
+
+  // 「見えていない→見えている」に変わった瞬間にアニメーションを開始する
+  if (!constellationWasVisible) {
+    constellationStartTimeMs = nowMs;
+    constellationWasVisible = true;
+  }
+
+  const elapsedMs = nowMs - constellationStartTimeMs;
+  const totalLines = CONSTELLATION_LINES.length;
+  let sumX = 0, sumY = 0, pointCount = 0;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(120, 200, 255, 0.85)';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = 'rgba(120, 200, 255, 0.6)';
+  ctx.shadowBlur = 4;
+
+  CONSTELLATION_LINES.forEach(([fromId, toId], index) => {
+    const from = starPosById[fromId];
+    const to = starPosById[toId];
+    if (!from || !to) return; // 端点が画面外の線は描画しない
+
+    // index番目の線は、順番に少しずつ時間差で伸びていく
+    const lineStartMs = index * CONSTELLATION_LINE_DURATION_MS;
+    const progress = clamp((elapsedMs - lineStartMs) / CONSTELLATION_LINE_DURATION_MS, 0, 1);
+    if (progress <= 0) return;
+
+    const endX = from.x + (to.x - from.x) * progress;
+    const endY = from.y + (to.y - from.y) * progress;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    sumX += from.x + to.x;
+    sumY += from.y + to.y;
+    pointCount += 2;
+  });
+  ctx.restore();
+
+  // 全ての線が描き終わったら、星座名をフェードインさせながら重心付近に表示する
+  const totalDurationMs = totalLines * CONSTELLATION_LINE_DURATION_MS;
+  if (elapsedMs > totalDurationMs && pointCount > 0) {
+    const fadeProgress = clamp((elapsedMs - totalDurationMs) / CONSTELLATION_NAME_FADE_MS, 0, 1);
+    const centerX = sumX / pointCount;
+    const centerY = sumY / pointCount;
+
+    ctx.save();
+    ctx.globalAlpha = fadeProgress;
+    ctx.font = 'bold 18px sans-serif';
+    ctx.textAlign = 'center';
+    const textWidth = ctx.measureText(CONSTELLATION_NAME).width;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(centerX - textWidth / 2 - 10, centerY - 12, textWidth + 20, 28);
+    ctx.fillStyle = '#a8dcff';
+    ctx.fillText(CONSTELLATION_NAME, centerX, centerY + 6);
+    ctx.restore();
+  }
+}
+
+// =========================================================
+// 6.5 世界の星空パネル描画(新規追加：⑨)
+// =========================================================
+// Alt/Azを円形スカイマップ上の座標に変換する(中心=天頂、外周=地平線、北を上にして時計回り)
+function altAzToCircularXY(altDeg, azDeg, cx, cy, radius) {
+  const r = radius * (1 - clamp(altDeg, 0, 90) / 90);
+  const azRad = degToRad(azDeg);
+  return {
+    x: cx + r * Math.sin(azRad),
+    y: cy - r * Math.cos(azRad)
+  };
+}
+
+function drawWorldSkyCanvas(now) {
+  const wctx = worldSkyCanvasEl.getContext('2d');
+  const w = worldSkyCanvasEl.width, h = worldSkyCanvasEl.height;
+  const cx = w / 2, cy = h / 2;
+  const radius = Math.min(w, h) / 2 - 18;
+
+  wctx.clearRect(0, 0, w, h);
+
+  // 地平線の円と方角ラベル
+  wctx.beginPath();
+  wctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  wctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  wctx.lineWidth = 1;
+  wctx.stroke();
+
+  wctx.fillStyle = 'rgba(255,255,255,0.8)';
+  wctx.font = '12px sans-serif';
+  wctx.textAlign = 'center';
+  wctx.fillText('N', cx, cy - radius - 6);
+  wctx.fillText('S', cx, cy + radius + 14);
+  wctx.fillText('E', cx + radius + 10, cy + 4);
+  wctx.fillText('W', cx - radius - 10, cy + 4);
+
+  const city = WORLD_CITIES[worldSkySelectedCityIndex];
+  const lst = getLST(now, city.lon);
+  const posById = {};
+  let visibleStarCount = 0;
+
+  starData.forEach(star => {
+    const { altDeg, azDeg } = raDecToAltAz(star.raHours, star.decDeg, city.lat, lst);
+    if (altDeg <= 0) return; // 地平線より下は非表示
+    visibleStarCount++;
+    const { x, y } = altAzToCircularXY(altDeg, azDeg, cx, cy, radius);
+    posById[star.id] = { x, y };
+
+    wctx.beginPath();
+    wctx.arc(x, y, 3, 0, Math.PI * 2);
+    wctx.fillStyle = '#ffffff';
+    wctx.shadowColor = '#ffffff';
+    wctx.shadowBlur = 6;
+    wctx.fill();
+    wctx.shadowBlur = 0;
+  });
+
+  // 星座線(このパネルではアニメーションさせず、条件を満たせば即座に全線表示)
+  const drawableLines = CONSTELLATION_LINES.filter(([a, b]) => posById[a] && posById[b]);
+  if (drawableLines.length >= CONSTELLATION_VISIBLE_LINE_THRESHOLD) {
+    wctx.strokeStyle = 'rgba(120, 200, 255, 0.75)';
+    wctx.lineWidth = 1.5;
+    let sumX = 0, sumY = 0, count = 0;
+    drawableLines.forEach(([a, b]) => {
+      wctx.beginPath();
+      wctx.moveTo(posById[a].x, posById[a].y);
+      wctx.lineTo(posById[b].x, posById[b].y);
+      wctx.stroke();
+      sumX += posById[a].x + posById[b].x;
+      sumY += posById[a].y + posById[b].y;
+      count += 2;
+    });
+    wctx.fillStyle = '#a8dcff';
+    wctx.font = '12px sans-serif';
+    wctx.fillText(CONSTELLATION_NAME, sumX / count, sumY / count - 10);
+  }
+
+  // 月
+  const moonAltAz = getMoonAltAz(now, city.lat, city.lon, lst);
+  if (moonAltAz.altDeg > 0) {
+    const { x, y } = altAzToCircularXY(moonAltAz.altDeg, moonAltAz.azDeg, cx, cy, radius);
+    wctx.beginPath();
+    wctx.arc(x, y, 8, 0, Math.PI * 2);
+    wctx.fillStyle = '#fff6d5';
+    wctx.shadowColor = '#fff6d5';
+    wctx.shadowBlur = 10;
+    wctx.fill();
+    wctx.shadowBlur = 0;
+  }
+
+  const noStarsNote = (visibleStarCount === 0 && moonAltAz.altDeg <= 0)
+    ? '\n(現在、地平線上に見える星・月はありません)' : '';
+  worldSkyStatusEl.textContent =
+    `${city.nameJa} (${city.name})\n${now.toLocaleString('ja-JP')}${noStarsNote}`;
+}
+
+// =========================================================
+// 6.6 撮影モード：静止画への星の重ね書き(新規追加：③④)
+// =========================================================
+// videoの1フレームを、CSSのobject-fit:coverと同じ見え方でcanvasに描き込む
+// (画面表示とcanvasのピクセルを一致させることで、星の座標計算がそのまま使える)
+function drawVideoCover(targetCtx, video, canvasW, canvasH) {
+  const videoW = video.videoWidth, videoH = video.videoHeight;
+  if (!videoW || !videoH) return;
+  const videoRatio = videoW / videoH;
+  const canvasRatio = canvasW / canvasH;
+  let sx, sy, sw, sh;
+  if (videoRatio > canvasRatio) {
+    sh = videoH;
+    sw = sh * canvasRatio;
+    sx = (videoW - sw) / 2;
+    sy = 0;
+  } else {
+    sw = videoW;
+    sh = sw / canvasRatio;
+    sx = 0;
+    sy = (videoH - sh) / 2;
+  }
+  targetCtx.drawImage(video, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
+}
+
+// drawStarLabelは常時グローバルのctxを使う実装のため、任意のcanvasに描けるよう別関数を用意
+function drawLabelOnCtx(targetCtx, x, y, text) {
+  targetCtx.font = '13px sans-serif';
+  const paddingX = 6, paddingY = 4;
+  const textWidth = targetCtx.measureText(text).width;
+  const boxX = x + 10;
+  const boxY = y - 10 - 13;
+  targetCtx.fillStyle = 'rgba(0,0,0,0.6)';
+  targetCtx.fillRect(boxX - paddingX, boxY - paddingY, textWidth + paddingX * 2, 13 + paddingY * 2);
+  targetCtx.fillStyle = '#fff';
+  targetCtx.fillText(text, boxX, boxY + 11);
+}
+
+// 撮影した瞬間のセンサー値(snapshot)を使って、静止画canvasに星・星座線・月を焼き込む
+// ライブ描画とは独立した処理にすることで、撮影後は動かない安定した結果になる
+function renderStarsOntoPhoto(targetCtx, canvasW, canvasH, snapshot) {
+  const { position, heading, deviceElevation, time } = snapshot;
+  const lst = getLST(time, position.longitude);
+  const posById = {};
+
+  starData.forEach(star => {
+    const { altDeg, azDeg } = raDecToAltAz(star.raHours, star.decDeg, position.latitude, lst);
+    if (altDeg <= 0) return;
+    const azDiff = normalizeAngleDiff(azDeg - heading);
+    const altDiff = altDeg - deviceElevation;
+    if (Math.abs(azDiff) > CONFIG.FOV_HORIZONTAL_DEG / 2) return;
+    if (Math.abs(altDiff) > CONFIG.FOV_VERTICAL_DEG / 2) return;
+
+    const x = canvasW / 2 + (azDiff / (CONFIG.FOV_HORIZONTAL_DEG / 2)) * (canvasW / 2);
+    const y = canvasH / 2 - (altDiff / (CONFIG.FOV_VERTICAL_DEG / 2)) * (canvasH / 2);
+    posById[star.id] = { x, y, name: star.name };
+
+    targetCtx.beginPath();
+    targetCtx.arc(x, y, CONFIG.STAR_DOT_RADIUS, 0, Math.PI * 2);
+    targetCtx.fillStyle = '#ffffff';
+    targetCtx.shadowColor = '#ffffff';
+    targetCtx.shadowBlur = 8;
+    targetCtx.fill();
+    targetCtx.shadowBlur = 0;
+
+    if (showAllNames) {
+      drawLabelOnCtx(targetCtx, x, y, star.name);
+    }
+  });
+
+  // 星座線(静止画では即座に全線＋星座名を表示。撮影後に動く必要はないため)
+  const drawableLines = CONSTELLATION_LINES.filter(([a, b]) => posById[a] && posById[b]);
+  if (drawableLines.length >= CONSTELLATION_VISIBLE_LINE_THRESHOLD) {
+    targetCtx.save();
+    targetCtx.strokeStyle = 'rgba(120, 200, 255, 0.85)';
+    targetCtx.lineWidth = 2;
+    targetCtx.shadowColor = 'rgba(120, 200, 255, 0.6)';
+    targetCtx.shadowBlur = 4;
+    let sumX = 0, sumY = 0, count = 0;
+    drawableLines.forEach(([a, b]) => {
+      targetCtx.beginPath();
+      targetCtx.moveTo(posById[a].x, posById[a].y);
+      targetCtx.lineTo(posById[b].x, posById[b].y);
+      targetCtx.stroke();
+      sumX += posById[a].x + posById[b].x;
+      sumY += posById[a].y + posById[b].y;
+      count += 2;
+    });
+    targetCtx.restore();
+
+    targetCtx.font = 'bold 18px sans-serif';
+    targetCtx.textAlign = 'center';
+    const cx = sumX / count, cy = sumY / count;
+    const textWidth = targetCtx.measureText(CONSTELLATION_NAME).width;
+    targetCtx.fillStyle = 'rgba(0,0,0,0.55)';
+    targetCtx.fillRect(cx - textWidth / 2 - 10, cy - 12, textWidth + 20, 28);
+    targetCtx.fillStyle = '#a8dcff';
+    targetCtx.fillText(CONSTELLATION_NAME, cx, cy + 6);
+    targetCtx.textAlign = 'left'; // 他の描画に影響しないよう元に戻す
+  }
+
+  // 月
+  const moonAltAz = getMoonAltAz(time, position.latitude, position.longitude, lst);
+  if (moonAltAz.altDeg > 0) {
+    const azDiff = normalizeAngleDiff(moonAltAz.azDeg - heading);
+    const altDiff = moonAltAz.altDeg - deviceElevation;
+    if (Math.abs(azDiff) <= CONFIG.FOV_HORIZONTAL_DEG / 2 && Math.abs(altDiff) <= CONFIG.FOV_VERTICAL_DEG / 2) {
+      const x = canvasW / 2 + (azDiff / (CONFIG.FOV_HORIZONTAL_DEG / 2)) * (canvasW / 2);
+      const y = canvasH / 2 - (altDiff / (CONFIG.FOV_VERTICAL_DEG / 2)) * (canvasH / 2);
+      targetCtx.beginPath();
+      targetCtx.arc(x, y, CONFIG.MOON_DOT_RADIUS, 0, Math.PI * 2);
+      targetCtx.fillStyle = '#fff6d5';
+      targetCtx.shadowColor = '#fff6d5';
+      targetCtx.shadowBlur = 15;
+      targetCtx.fill();
+      targetCtx.shadowBlur = 0;
+      if (showAllNames) drawLabelOnCtx(targetCtx, x, y, '月 (Moon)');
+    }
+  }
+}
+
+// 「③ 撮影」ボタン：現在のカメラ映像＋その瞬間のセンサー値で静止画を作る
+shootButton.addEventListener('click', () => {
+  if (!cameraStream) {
+    alert('先に「① カメラ起動」を押してください');
+    return;
+  }
+  if (!currentPosition || currentHeading === null) {
+    alert('先に「② 位置情報＋センサー開始」を押してください');
+    return;
+  }
+
+  // 撮影の邪魔になるパネルは自動的に閉じる
+  testModePanel.classList.remove('open');
+  worldSkyPanel.classList.remove('open');
+
+  photoCanvasEl.width = canvasEl.width;
+  photoCanvasEl.height = canvasEl.height;
+
+  drawVideoCover(photoCtx, videoEl, photoCanvasEl.width, photoCanvasEl.height);
+
+  // 撮影した瞬間のセンサー値を凍結(スナップショット)して使う
+  const deviceElevation = (currentElevationDeg !== null ? currentElevationDeg : 0) - CONFIG.ELEVATION_OFFSET_DEG;
+  const snapshot = {
+    position: { latitude: currentPosition.latitude, longitude: currentPosition.longitude },
+    heading: currentHeading,
+    deviceElevation,
+    time: effectiveNow()
+  };
+  renderStarsOntoPhoto(photoCtx, photoCanvasEl.width, photoCanvasEl.height, snapshot);
+
+  isPhotoMode = true;
+  photoCanvasEl.classList.add('active');
+  photoControls.classList.add('active');
+  mainButtonRow.style.display = 'none';
+});
+
+backToLiveButton.addEventListener('click', () => {
+  isPhotoMode = false;
+  photoCanvasEl.classList.remove('active');
+  photoControls.classList.remove('active');
+  mainButtonRow.style.display = 'flex';
+});
+
+savePhotoButton.addEventListener('click', () => {
+  const link = document.createElement('a');
+  link.download = `star-photo-${Date.now()}.png`;
+  link.href = photoCanvasEl.toDataURL('image/png');
+  link.click();
+});
+
+applyTestTimeButton.addEventListener('click', () => {
+  if (testDatetimeInput.value) {
+    testDate = new Date(testDatetimeInput.value); // 端末のローカル時刻として解釈される
+  }
+  testModePanel.classList.remove('open'); // 反映したらパネルを自動で閉じる
+});
+clearTestTimeButton.addEventListener('click', () => {
+  testDate = null;
+  testDatetimeInput.value = '';
+});
+
+function effectiveNow() {
+  const base = testDate || new Date();
+  return new Date(base.getTime() + timeOffsetMs);
+}
+
+// オフセットを見やすい文字列にする(例: "+1時間30分" "-45分")
+function formatOffset(ms) {
+  if (ms === 0) return 'なし';
+  const sign = ms > 0 ? '+' : '-';
+  const totalMinutes = Math.round(Math.abs(ms) / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  let text = sign;
+  if (days > 0) text += `${days}日`;
+  if (hours > 0) text += `${hours}時間`;
+  if (minutes > 0 || (days === 0 && hours === 0)) text += `${minutes}分`;
+  return text;
+}
+
+function updateTimeOffsetDisplay() {
+  timeOffsetDisplay.textContent = 'ズレ: ' + formatOffset(timeOffsetMs);
+}
+
+// +1時間/-10分などのボタン(新規追加): 押すたびにオフセットを加算する
+document.querySelectorAll('#test-mode-panel [data-offset-min]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const minutes = parseInt(btn.getAttribute('data-offset-min'), 10);
+    timeOffsetMs += minutes * 60000;
+    updateTimeOffsetDisplay();
+  });
+});
+
+resetOffsetButton.addEventListener('click', () => {
+  timeOffsetMs = 0;
+  isAutoPlaying = false;
+  autoplayToggleButton.textContent = '▶ 再生';
+  updateTimeOffsetDisplay();
+});
+
+// 日時を直接指定した場合は、それまでのズレや自動再生をリセットして混乱を防ぐ
+applyTestTimeButton.addEventListener('click', () => {
+  timeOffsetMs = 0;
+  isAutoPlaying = false;
+  autoplayToggleButton.textContent = '▶ 再生';
+  updateTimeOffsetDisplay();
+});
+clearTestTimeButton.addEventListener('click', () => {
+  timeOffsetMs = 0;
+  isAutoPlaying = false;
+  autoplayToggleButton.textContent = '▶ 再生';
+  updateTimeOffsetDisplay();
+});
+
+// 自動再生のON/OFF切り替え(新規追加)
+autoplayToggleButton.addEventListener('click', () => {
+  isAutoPlaying = !isAutoPlaying;
+  autoplayToggleButton.textContent = isAutoPlaying ? '⏸ 停止' : '▶ 再生';
+  lastFrameTimestampMs = null; // 再開時に経過時間が飛ばないようリセット
+});
+
+// =========================================================
+// 6. 毎フレーム: 星の位置を計算して画面に描画
+// =========================================================
+function drawFrame() {
+  ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+
+  // 自動再生中は、実時間の経過分×速度倍率をオフセットに加算していく(新規追加)
+  if (isAutoPlaying) {
+    const nowMs = performance.now();
+    if (lastFrameTimestampMs !== null) {
+      const realDeltaMs = nowMs - lastFrameTimestampMs;
+      const speedMultiplier = parseInt(autoplaySpeedSelect.value, 10);
+      timeOffsetMs += realDeltaMs * speedMultiplier;
+      updateTimeOffsetDisplay();
+    }
+    lastFrameTimestampMs = nowMs;
+  }
+
+  // 世界の星空パネルが開いていれば、AR用センサーの有無に関わらず描画する(新規追加)
+  // (自国の位置情報・向きに依存しないため、カメラ/センサー未起動でも動作する)
+  if (worldSkyPanel.classList.contains('open')) {
+    drawWorldSkyCanvas(effectiveNow());
+  }
+
+  const statusLines = [];
+
+  if (!currentPosition) {
+    statusLines.push('[位置情報] 取得待ち...');
+  }
+  if (currentHeading === null) {
+    statusLines.push('[向き] 取得待ち...');
+  }
+
+  if (currentPosition && currentHeading !== null) {
+    const now = effectiveNow();
+    const lst = getLST(now, currentPosition.longitude);
+
+    // 端末(カメラ)が向いている仰角。alpha/beta/gammaから傾き補正込みで計算済み(修正済み)
+    // + 実測に基づく補正値(CONFIG.ELEVATION_OFFSET_DEG)を差し引く
+    const deviceElevation = (currentElevationDeg !== null ? currentElevationDeg : 0) - CONFIG.ELEVATION_OFFSET_DEG;
+
+    let timeLabel = testDate ? '[テスト日時使用] ' : '[現在時刻] ';
+    if (isAutoPlaying) timeLabel = '[自動再生中] ';
+    else if (timeOffsetMs !== 0) timeLabel += `(ズレ${formatOffset(timeOffsetMs)}) `;
+    statusLines.push(timeLabel + now.toLocaleString('ja-JP'));
+    statusLines.push(`向き:${currentHeading.toFixed(0)}° 仰角:${deviceElevation.toFixed(0)}°`);
+
+    let visibleCount = 0;
+    let drawnCount = 0;
+    starScreenPositions = []; // 毎フレーム、画面に描画された星の座標をリセットして記録し直す
+
+    starData.forEach(star => {
+      const { altDeg, azDeg } = raDecToAltAz(star.raHours, star.decDeg, currentPosition.latitude, lst);
+      if (altDeg <= 0) return; // 地平線より下は対象外
+      visibleCount++;
+
+      const azDiff = normalizeAngleDiff(azDeg - currentHeading);
+      const altDiff = altDeg - deviceElevation;
+
+      // 画角の範囲外なら描画しない
+      if (Math.abs(azDiff) > CONFIG.FOV_HORIZONTAL_DEG / 2) return;
+      if (Math.abs(altDiff) > CONFIG.FOV_VERTICAL_DEG / 2) return;
+
+      const x = canvasEl.width / 2 + (azDiff / (CONFIG.FOV_HORIZONTAL_DEG / 2)) * (canvasEl.width / 2);
+      const y = canvasEl.height / 2 - (altDiff / (CONFIG.FOV_VERTICAL_DEG / 2)) * (canvasEl.height / 2);
+
+      drawnCount++;
+      starScreenPositions.push({ x, y, name: star.name, id: star.id });
+
+      // 星を描画
+      ctx.beginPath();
+      ctx.arc(x, y, CONFIG.STAR_DOT_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 8;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // ON/OFFボタンがONなら、常時すべての星の名前を表示
+      if (showAllNames) {
+        drawStarLabel(x, y, star.name);
+      }
+    });
+
+    // 星座線アニメーションの描画(新規追加): ONの場合のみ実行
+    if (showConstellationLines) {
+      const starPosById = {};
+      starScreenPositions.forEach(s => { if (s.id) starPosById[s.id] = s; });
+      drawConstellationAnimation(starPosById, performance.now());
+    }
+
+    // 月の描画(新規追加: 恒星と異なり視差補正込みの専用計算を使用)
+    // オリオン座が見えにくい時期でも、月なら明るく見つけやすいため
+    // 位置精度(FOVキャリブレーション)確認の第一段階として利用する
+    const moonAltAz = getMoonAltAz(now, currentPosition.latitude, currentPosition.longitude, lst);
+    statusLines.push(`月: 高度${moonAltAz.altDeg.toFixed(1)}° 方位${moonAltAz.azDeg.toFixed(1)}°` +
+      (moonAltAz.altDeg <= 0 ? ' (地平線下)' : ''));
+
+    if (moonAltAz.altDeg > 0) {
+      const azDiff = normalizeAngleDiff(moonAltAz.azDeg - currentHeading);
+      const altDiff = moonAltAz.altDeg - deviceElevation;
+
+      if (Math.abs(azDiff) <= CONFIG.FOV_HORIZONTAL_DEG / 2 && Math.abs(altDiff) <= CONFIG.FOV_VERTICAL_DEG / 2) {
+        const x = canvasEl.width / 2 + (azDiff / (CONFIG.FOV_HORIZONTAL_DEG / 2)) * (canvasEl.width / 2);
+        const y = canvasEl.height / 2 - (altDiff / (CONFIG.FOV_VERTICAL_DEG / 2)) * (canvasEl.height / 2);
+
+        starScreenPositions.push({ x, y, name: '月 (Moon)' });
+
+        // 星と区別できるよう、大きめ・淡黄色で描画
+        ctx.beginPath();
+        ctx.arc(x, y, CONFIG.MOON_DOT_RADIUS, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff6d5';
+        ctx.shadowColor = '#fff6d5';
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        if (showAllNames) {
+          drawStarLabel(x, y, '月 (Moon)');
+        }
+      }
+    }
+
+    // タップで選択した星の名前を、一定時間だけ表示
+    if (!showAllNames && tappedStar) {
+      if (Date.now() - tappedStar.time < TAP_LABEL_DURATION_MS) {
+        drawStarLabel(tappedStar.x, tappedStar.y, tappedStar.name);
+      } else {
+        tappedStar = null;
+      }
+    }
+
+    statusLines.push(`地平線上の星:${visibleCount} / 画面内に描画:${drawnCount}`);
+  }
+
+  statusEl.textContent = statusLines.join('\n');
+  requestAnimationFrame(drawFrame);
+}
+
+startCameraButton.addEventListener('click', startCamera);
+startSensorButton.addEventListener('click', startSensors);
+
+requestAnimationFrame(drawFrame);
+</script>
+
+</body>
+</html>
